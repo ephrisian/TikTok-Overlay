@@ -799,6 +799,7 @@ export const StreamerDashboard: React.FC = () => {
 
                   {connector.status === 'connected' ? (
                     <button
+                      type="button"
                       onClick={handleDisconnect}
                       className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition"
                     >
@@ -806,6 +807,7 @@ export const StreamerDashboard: React.FC = () => {
                     </button>
                   ) : (
                     <button
+                      type="button"
                       onClick={handleConnect}
                       disabled={connector.status === 'connecting'}
                       className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5"

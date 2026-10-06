@@ -126,18 +126,26 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
 
   // Connect WebSocket for live events
   useEffect(() => {
+    let isDestroyed = false;
+    let reconnectTimer: NodeJS.Timeout | null = null;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
 
     function connect() {
+      if (isDestroyed) return;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        if (isDestroyed) {
+          ws.close();
+          return;
+        }
         console.log('[Overlay WS] Connected to orchestrator');
       };
 
       ws.onmessage = (msgEvent) => {
+        if (isDestroyed) return;
         try {
           const msg: WsMessage = JSON.parse(msgEvent.data);
           handleWsMessage(msg);
@@ -147,14 +155,18 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
       };
 
       ws.onclose = () => {
-        console.warn('[Overlay WS] Disconnected, reconnecting in 2s...');
-        setTimeout(connect, 2000);
+        if (!isDestroyed) {
+          console.warn('[Overlay WS] Disconnected, reconnecting in 2s...');
+          reconnectTimer = setTimeout(connect, 2000);
+        }
       };
     }
 
     connect();
 
     return () => {
+      isDestroyed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (wsRef.current) {
         wsRef.current.close();
       }

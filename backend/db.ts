@@ -338,11 +338,13 @@ class Database {
       console.error('[DB] Failed to read db.json, initializing defaults:', err);
     }
     const initial = this.initDefaults();
-    this.save(initial);
+    this.flushSave(initial);
     return initial;
   }
 
-  private save(data = this.data) {
+  private saveTimer: NodeJS.Timeout | null = null;
+
+  public flushSave(data = this.data) {
     try {
       if (!fs.existsSync(DATA_DIR)) {
         fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -351,6 +353,15 @@ class Database {
     } catch (err) {
       console.error('[DB] Error saving db.json:', err);
     }
+  }
+
+  private save(data = this.data) {
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer);
+    }
+    this.saveTimer = setTimeout(() => {
+      this.flushSave(data);
+    }, 1000);
   }
 
   // User CRM Queries
