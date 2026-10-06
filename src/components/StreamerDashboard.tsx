@@ -34,6 +34,8 @@ import {
   Search
 } from 'lucide-react';
 import { FabricOverlay } from '../overlay/FabricOverlay.tsx';
+import { ChatMonitor } from './ChatMonitor.tsx';
+import { OverlaySettingsPanel } from './OverlaySettingsPanel.tsx';
 import { LiveStreamStatsPanel } from './LiveStreamStatsPanel.tsx';
 import { 
   AspectRatio, 
@@ -49,7 +51,7 @@ export const StreamerDashboard: React.FC = () => {
   const [aspect, setAspect] = useState<AspectRatio>('9:16');
   const [showGuides, setShowGuides] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'simulator' | 'boss' | 'crm' | 'rules' | 'stats'>('simulator');
+  const [activeTab, setActiveTab] = useState<'simulator' | 'boss' | 'crm' | 'rules' | 'stats' | 'settings'>('simulator');
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Live state from backend
@@ -78,6 +80,8 @@ export const StreamerDashboard: React.FC = () => {
   const [simChatText, setSimChatText] = useState('Loving this overlay! Let’s crush the boss!');
   const [simChatUser, setSimChatUser] = useState('');
   const [simSelectedGift, setSimSelectedGift] = useState('Galaxy 🌌');
+  const [showPreview, setShowPreview] = useState<boolean>(() => localStorage.getItem('showOverlayPreview') !== 'false');
+  const [showChatOverlay, setShowChatOverlay] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [customSessionId, setCustomSessionId] = useState('');
 
@@ -204,6 +208,7 @@ export const StreamerDashboard: React.FC = () => {
         const data = await res.json();
         setUsers(data.users || []);
         setTriggers(data.triggers || []);
+        setShowChatOverlay(!!data.settings?.showChat);
         if (data.bossState) setBossState(data.bossState);
         if (data.connectorState) {
           setConnector(data.connectorState);
@@ -236,6 +241,26 @@ export const StreamerDashboard: React.FC = () => {
     const interval = setInterval(fetchState, 4000);
     return () => clearInterval(interval);
   }, []);
+
+  const toggleShowChat = async (next: boolean) => {
+    setShowChatOverlay(next);
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ showChat: next })
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const togglePreview = () => {
+    setShowPreview(prev => {
+      localStorage.setItem('showOverlayPreview', String(!prev));
+      return !prev;
+    });
+  };
 
   const handleConnect = async () => {
     try {
@@ -594,6 +619,12 @@ export const StreamerDashboard: React.FC = () => {
                 Live Overlay Viewport
               </span>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={togglePreview}
+                  className="text-[11px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-300 hover:bg-slate-800 font-semibold"
+                >
+                  {showPreview ? 'Hide Preview' : 'Show Preview'}
+                </button>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold">
                   Offline Ready
                 </span>
@@ -604,13 +635,15 @@ export const StreamerDashboard: React.FC = () => {
             </div>
 
             {/* Embedded Fabric.js Overlay Preview */}
-            <div className="w-full flex justify-center py-2 bg-slate-950/60 rounded-xl border border-slate-800/80 p-2">
-              <FabricOverlay
-                aspectRatio={aspect}
-                scale={aspect === '9:16' ? 0.35 : 0.44}
-                showGuides={showGuides}
-              />
-            </div>
+            {showPreview && (
+              <div className="w-full flex justify-center py-2 bg-slate-950/60 rounded-xl border border-slate-800/80 p-2">
+                <FabricOverlay
+                  aspectRatio={aspect}
+                  scale={aspect === '9:16' ? 0.35 : 0.44}
+                  showGuides={showGuides}
+                />
+              </div>
+            )}
 
             {/* OBS Guide Info Box (Offline & Localhost Emphasized) */}
             <div className="w-full mt-3 p-3.5 bg-slate-950 rounded-xl border border-slate-800 text-xs flex flex-col gap-2">
@@ -672,6 +705,13 @@ export const StreamerDashboard: React.FC = () => {
               <div className="text-lg font-black text-cyan-400">{streamStats.chats}</div>
             </div>
           </div>
+
+          <ChatMonitor
+            viewerCount={connector.viewerCount}
+            users={users}
+            showChat={showChatOverlay}
+            onToggleShowChat={toggleShowChat}
+          />
         </div>
 
         {/* Right Column: Orchestrator Tabs */}
@@ -736,6 +776,18 @@ export const StreamerDashboard: React.FC = () => {
             >
               <BarChart3 className="w-3.5 h-3.5" />
               Stream Stats (llamaXc)
+            </button>
+
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition ${
+                activeTab === 'settings'
+                  ? 'bg-sky-500 text-slate-950 shadow-md shadow-sky-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              Overlay Settings
             </button>
           </div>
 
@@ -1645,6 +1697,8 @@ export const StreamerDashboard: React.FC = () => {
 
           {/* TAB 5: Live Stream Stats (llamaXc/tiktok-live-stream-stats) */}
           {activeTab === 'stats' && <LiveStreamStatsPanel />}
+
+          {activeTab === 'settings' && <OverlaySettingsPanel />}
         </div>
       </div>
 

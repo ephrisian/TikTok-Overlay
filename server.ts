@@ -44,6 +44,7 @@ eventsRouter.setCallbacks((event) => {
     gifts: db.getLeaderboard('gifts'),
     chat_messages: db.getLeaderboard('chat_messages')
   });
+  broadcastWs('supporters_update', db.getTopSupporters());
 });
 
 ruleEngine.setCallback((action) => {
@@ -99,6 +100,7 @@ wss.on('connection', (ws: WebSocket) => {
     users: db.getAllUsers(),
     currentStream: db.getCurrentStream(),
     settings: db.getSettings(),
+    supporters: db.getTopSupporters(),
     triggers: db.getTriggers(),
     bossState: bossManager.getState(),
     connectorState: tiktokClient.getState(),
@@ -136,6 +138,7 @@ app.get('/api/state', (req, res) => {
     users: db.getAllUsers(),
     currentStream: db.getCurrentStream(),
     settings: db.getSettings(),
+    supporters: db.getTopSupporters(),
     triggers: db.getTriggers(),
     bossState: bossManager.getState(),
     connectorState: tiktokClient.getState(),
@@ -337,6 +340,7 @@ app.post('/api/data/wipe', (req, res) => {
     users: [],
     currentStream: freshState.currentStream,
     settings: freshState.settings,
+    supporters: db.getTopSupporters(),
     triggers: freshState.triggers,
     bossState: bossManager.getState(),
     connectorState: tiktokClient.getState(),
@@ -367,6 +371,8 @@ app.post('/api/users/:id/buddy', (req, res) => {
 // Settings & Stream Session
 app.post('/api/settings', (req, res) => {
   db.updateSettings(req.body);
+  broadcastWs('settings_update', db.getSettings());
+  broadcastWs('supporters_update', db.getTopSupporters());
   res.json({ success: true, settings: db.getSettings() });
 });
 

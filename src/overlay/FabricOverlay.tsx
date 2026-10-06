@@ -9,9 +9,12 @@ import {
   WsMessage, 
   PachinkoDropEvent, 
   TriggerAction,
-  NormalizedStreamEvent
+  NormalizedStreamEvent,
+  BuddySpawnInfo,
+  SupportersPayload
 } from '../../backend/types.ts';
 import { soundFX } from '../audio/soundFX.ts';
+import { BuddyManager, BuddyInstance } from './buddyManager.ts';
 
 interface FabricOverlayProps {
   aspectRatio?: AspectRatio;
@@ -21,21 +24,8 @@ interface FabricOverlayProps {
   showGuides?: boolean;
 }
 
-interface ActiveBuddy {
-  id: string;
-  username: string;
-  pfpUrl: string;
-  buddyType: string;
-  rarityTier: string;
-  glowColor: string;
-  x: number;
-  y: number;
-  scale: number;
-  speechText?: string;
-  speechTimer?: number;
-  bounceOffset: number;
-  isFinalStriker?: boolean;
-}
+const CHAT_MAX_LINES = 6;
+const CHAT_LINE_TTL_MS = 15000;
 
 interface Projectile {
   id: string;
@@ -94,14 +84,23 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
 
   // Real-time state
   const [bossState, setBossState] = useState<BossFightState | null>(null);
-  const [buddies, setBuddies] = useState<Record<string, ActiveBuddy>>({});
+  const buddyManagerRef = useRef<BuddyManager>(new BuddyManager({
+    width, height, baselineY: height * (isPortrait ? 0.92 : 0.88), slotWidth: 120, margin: width * 0.08
+  }));
   const [bannerAlert, setBannerAlert] = useState<{ title: string; subtitle: string; color: string } | null>(null);
-  const [leaderboard, setLeaderboard] = useState<Array<{ username: string; value: number; pfpUrl: string; tier: string }>>([]);
+  const [supporters, setSupporters] = useState<SupportersPayload | null>(null);
 
   const projectilesRef = useRef<Projectile[]>([]);
   const floatingTextsRef = useRef<FloatingText[]>([]);
   const pachinkoBallsRef = useRef<ActivePachinkoBall[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
+  const showChatRef = useRef(false);
+  const chatLinesRef = useRef<Array<{ id: string; username: string; message: string; at: number }>>([]);
+
+  // Keep the buddy lane layout in sync with the canvas size (overlay layout from the Maya Fix)
+  buddyManagerRef.current.setLayout({
+    width, height, baselineY: height * (isPortrait ? 0.92 : 0.88), slotWidth: 120, margin: width * 0.08
+  });
 
   // Quadrant anchor positioning calculator
   const getQuadrantCoords = (anchor: AnchorQuadrant, offsetX = 0, offsetY = 0) => {
@@ -178,14 +177,11 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
       case 'init': {
         const payload = msg.payload;
         if (payload.bossState) setBossState(payload.bossState);
-        if (payload.leaderboards?.likes) setLeaderboard(payload.leaderboards.likes);
-        if (payload.users) {
-          const initialBuddies: Record<string, ActiveBuddy> = {};
-          payload.users.slice(0, 16).forEach((u: TikTokUser, idx: number) => {
-            initialBuddies[u.id] = createBuddyEntry(u, idx, payload.users.length);
-          });
-          setBuddies(initialBuddies);
-        }
+        if (payload.supporters) setSupporters(payload.supporters);
+        if (payload.settings) showChatRef.current = !!payload.settings.showChat;
+        if (payload.settings) buddyManagerRef.current.configure(payload.settings.buddies, payload.settings.maxBuddiesOnScreen);
+        // Buddies are never seeded from the CRM; a full-state reset just clears them
+        if (payload.users && payload.users.length === 0) buddyManagerRef.current.clear();
         if (onStatsUpdate) onStatsUpdate(payload);
         break;
       }
@@ -207,7 +203,7 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
         soundFX.playAttackHit(vfx.source === 'gift');
 
         // Locate buddy avatar position or fallback to bottom
-        const attacker = buddies[vfx.userId];
+        const attacker = buddyManagerRef.current.findByUser(vfx.userId);
         const startX = attacker ? attacker.x : width * (0.2 + Math.random() * 0.6);
         const startY = attacker ? attacker.y : height * 0.88;
 
@@ -278,6 +274,12 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
             color: '#8b5cf6'
           });
           setTimeout(() => setBannerAlert(null), action.durationMs || 5000);
+        } else if (action.type === 'spawn_buddy' && action.targetUser?.id && (action as any).spawn) {
+          buddyManagerRef.current.spawn({
+            user: action.targetUser,
+            spawn: (action as any).spawn as BuddySpawnInfo,
+            buddyType: action.targetUser.buddy_type
+          });
         } else if (action.type === 'tween_buddy' && action.targetUser?.id) {
           const uid = action.targetUser.id;
           triggerBuddyReaction(uid, action.tweenType || 'bounce');
@@ -288,105 +290,50 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
       case 'event': {
         const evt = msg.payload as NormalizedStreamEvent;
         if (evt.type === 'chat') {
-          // Display speech bubble on active buddy
-          setBuddies(prev => {
-            const current = prev[evt.userId];
-            if (!current) return prev;
-            return {
-              ...prev,
-              [evt.userId]: {
-                ...current,
-                speechText: evt.message.slice(0, 36),
-                speechTimer: Date.now() + 4500,
-                bounceOffset: 25
-              }
-            };
-          });
+          if (showChatRef.current) {
+            chatLinesRef.current = [
+              ...chatLinesRef.current.slice(-(CHAT_MAX_LINES - 1)),
+              { id: 'chat_' + Math.random(), username: evt.username, message: evt.message, at: Date.now() }
+            ];
+          }
+          // Speech bubbles only show on buddies a rule has already spawned
+          const b = buddyManagerRef.current.findByUser(evt.userId);
+          if (b) {
+            b.speechText = evt.message.slice(0, 36);
+            b.speechTimer = Date.now() + 4500;
+            b.bounceOffset = 25;
+          }
         } else if (evt.type === 'like_burst') {
           soundFX.playLikePop();
-        } else if (evt.type === 'join') {
-          // Add or ensure buddy representation
-          setBuddies(prev => {
-            if (prev[evt.userId]) return prev;
-            const newIndex = Object.keys(prev).length;
-            return {
-              ...prev,
-              [evt.userId]: {
-                id: evt.userId,
-                username: evt.username,
-                pfpUrl: evt.pfpUrl,
-                buddyType: 'circle',
-                rarityTier: 'common',
-                glowColor: '#10b981',
-                x: calculateSeatX(newIndex, 16),
-                y: height * (isPortrait ? 0.92 : 0.88),
-                scale: 1,
-                bounceOffset: 0
-              }
-            };
-          });
         }
         break;
       }
 
-      case 'leaderboard_update': {
-        if (msg.payload.likes) setLeaderboard(msg.payload.likes);
+      case 'supporters_update': {
+        setSupporters(msg.payload as SupportersPayload);
         break;
       }
+
+      case 'settings_update': {
+        showChatRef.current = !!msg.payload?.showChat;
+        if (!showChatRef.current) chatLinesRef.current = [];
+        buddyManagerRef.current.configure(msg.payload?.buddies, msg.payload?.maxBuddiesOnScreen);
+        break;
+      }
+
+      case 'leaderboard_update':
+        break;
     }
   };
 
-  const createBuddyEntry = (u: TikTokUser, index: number, total: number): ActiveBuddy => {
-    return {
-      id: u.id,
-      username: u.username,
-      pfpUrl: u.pfp_url,
-      buddyType: u.buddy_type || 'circle',
-      rarityTier: u.rarity_tier || 'common',
-      glowColor: u.glow_color || '#10b981',
-      x: calculateSeatX(index, Math.max(total, 8)),
-      y: height * (isPortrait ? 0.92 : 0.88),
-      scale: 1,
-      bounceOffset: 0
-    };
-  };
-
-  const calculateSeatX = (index: number, total: number): number => {
-    const margin = width * 0.08;
-    const availableWidth = width - margin * 2;
-    const spacing = availableWidth / Math.max(1, Math.min(total, 12));
-    const normalizedIdx = index % 12;
-    return margin + spacing * (normalizedIdx + 0.5);
-  };
-
   const triggerBuddyReaction = (userId: string, tweenType: 'bounce' | 'grow' | 'shake' | 'emote_popup') => {
-    setBuddies(prev => {
-      const b = prev[userId];
-      if (!b) return prev;
-      return {
-        ...prev,
-        [userId]: {
-          ...b,
-          bounceOffset: tweenType === 'bounce' ? 30 : 15,
-          scale: tweenType === 'grow' ? 1.35 : 1
-        }
-      };
-    });
-
-    setTimeout(() => {
-      setBuddies(prev => {
-        const b = prev[userId];
-        if (!b) return prev;
-        return {
-          ...prev,
-          [userId]: {
-            ...b,
-            bounceOffset: 0,
-            scale: 1
-          }
-        };
-      });
-    }, 450);
+    const b = buddyManagerRef.current.findByUser(userId);
+    if (!b) return;
+    b.bounceOffset = tweenType === 'bounce' ? 30 : 15;
+    if (tweenType === 'grow') {
+      b.scale = 1.35;
+      setTimeout(() => { b.scale = 1; }, 450);
+    }
   };
 
   // Initialize Fabric Canvas & Render Loop
@@ -429,8 +376,11 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
       // 5. Draw Floating Damage Numbers
       drawFloatingTextsLayer(ctx);
 
-      // 6. Draw Buddies Amphitheater Row
+      // 6. Rule-spawned buddies (lane layout, lifetimes, exit animations)
+      buddyManagerRef.current.update();
       drawBuddiesLayer(ctx);
+
+      drawChatLayer(ctx);
 
       // 7. Draw Dynamic Announcement Banner
       if (bannerAlert) {
@@ -438,7 +388,7 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
       }
 
       // 8. Draw Leaderboard Widget (pinned to TOP_RIGHT or MIDDLE_RIGHT)
-      drawLeaderboardWidget(ctx);
+      drawSupportersWidget(ctx);
 
       animationFrameId = requestAnimationFrame(renderLoop);
     };
@@ -449,7 +399,7 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
       cancelAnimationFrame(animationFrameId);
       canvas.dispose();
     };
-  }, [width, height, showGuides, bossState, buddies, bannerAlert, leaderboard]);
+  }, [width, height, showGuides, bossState, bannerAlert, supporters]);
 
   // Canvas Drawing Helpers
   const drawQuadrantGuides = (ctx: CanvasRenderingContext2D) => {
@@ -769,12 +719,13 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
   };
 
   const drawBuddiesLayer = (ctx: CanvasRenderingContext2D) => {
-    const buddyList = Object.values(buddies);
+    const buddyList: BuddyInstance[] = buddyManagerRef.current.getActive();
 
     buddyList.forEach(b => {
       const curY = b.y - b.bounceOffset;
 
       ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, b.alpha));
       ctx.translate(b.x, curY);
       ctx.scale(b.scale, b.scale);
 
@@ -868,6 +819,43 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
     });
   };
 
+  // Recent chat, stacked bottom-left above the buddy lanes
+  const drawChatLayer = (ctx: CanvasRenderingContext2D) => {
+    if (!showChatRef.current) return;
+    const now = Date.now();
+    chatLinesRef.current = chatLinesRef.current.filter(l => now - l.at < CHAT_LINE_TTL_MS);
+    const lines = chatLinesRef.current;
+    if (lines.length === 0) return;
+
+    const boxW = Math.min(width * 0.6, 520);
+    const lineH = 34;
+    const x = 24;
+    const bottom = height * (isPortrait ? 0.80 : 0.74);
+
+    ctx.save();
+    ctx.font = '600 16px Inter, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    lines.forEach((l, i) => {
+      const y = bottom - (lines.length - 1 - i) * lineH;
+      const age = now - l.at;
+      ctx.globalAlpha = Math.max(0, Math.min(1, (CHAT_LINE_TTL_MS - age) / 1500));
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.beginPath();
+      ctx.roundRect(x, y - lineH / 2 + 2, boxW, lineH - 4, 8);
+      ctx.fill();
+      ctx.fillStyle = '#38bdf8';
+      const name = l.username.slice(0, 14) + ': ';
+      ctx.fillText(name, x + 10, y);
+      const nameW = ctx.measureText(name).width;
+      ctx.fillStyle = '#f8fafc';
+      let msg = l.message;
+      while (msg.length > 1 && ctx.measureText(msg).width > boxW - nameW - 24) msg = msg.slice(0, -1);
+      ctx.fillText(msg === l.message ? msg : msg + '…', x + 10 + nameW, y);
+    });
+    ctx.restore();
+  };
+
   const drawBannerAlert = (ctx: CanvasRenderingContext2D, alert: { title: string; subtitle: string; color: string }) => {
     const q = getQuadrantCoords('TOP_CENTER', 0, 30);
     const bannerW = Math.min(width * 0.75, 540);
@@ -897,13 +885,15 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
     ctx.restore();
   };
 
-  const drawLeaderboardWidget = (ctx: CanvasRenderingContext2D) => {
-    if (leaderboard.length === 0) return;
+  const drawSupportersWidget = (ctx: CanvasRenderingContext2D) => {
+    // Shown only when the admin toggle is ON and at least one viewer meets the criteria
+    if (!supporters || !supporters.enabled || supporters.entries.length === 0) return;
+    const leaderboard = supporters.entries;
 
     // Anchor: TOP_RIGHT
     const pad = 24;
     const cardW = isPortrait ? 240 : 280;
-    const cardH = 34 + leaderboard.slice(0, 4).length * 28;
+    const cardH = 34 + leaderboard.slice(0, 8).length * 28;
     const cardX = width - cardW - pad;
     const cardY = pad;
 
@@ -923,7 +913,7 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
     ctx.fillText('🏆 TOP STREAM SUPPORTERS', cardX + 14, cardY + 22);
 
     // Rows
-    leaderboard.slice(0, 4).forEach((entry, idx) => {
+    leaderboard.slice(0, 8).forEach((entry, idx) => {
       const rowY = cardY + 48 + idx * 28;
       const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '✨';
 

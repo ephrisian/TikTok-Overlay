@@ -4,7 +4,8 @@ import {
   IFTTTRule, 
   TriggerAction, 
   SingleCondition,
-  PachinkoDropEvent 
+  PachinkoDropEvent,
+  BuddySpawnInfo
 } from './types.ts';
 import { db } from './db.ts';
 import { pachinkoManager } from './pachinkoManager.ts';
@@ -27,9 +28,18 @@ export class RuleEngine {
       return;
     }
 
+    // Expose join-derived flags (used by preset rules as user.firstTime etc.)
+    const joinFlags = event.type === 'join'
+      ? {
+          firstTime: event.firstTime,
+          firstTimeThisStream: event.firstTimeThisStream,
+          returningFromBreak: event.returningFromBreak
+        }
+      : {};
+
     const context = {
       event,
-      user,
+      user: { ...user, ...joinFlags },
       stream: db.getCurrentStream()
     };
 
@@ -37,7 +47,7 @@ export class RuleEngine {
       const matchResult = this.checkConditionWithExplanation(rule.condition, context);
       if (matchResult.matched) {
         console.log(`[RuleEngine] RULE MATCHED: "${rule.name}" (ID: ${rule.id}) on event: "${event.type}" from user: @${user.username || 'unknown'} | Reason: ${matchResult.reason} | Dispatched actions: [${rule.actions.map(a => a.type).join(', ')}]`);
-        this.executeActions(rule, context);
+        this.executeActions(rule, context, event);
       }
     }
   }
@@ -113,7 +123,7 @@ export class RuleEngine {
     return curr;
   }
 
-  private executeActions(rule: IFTTTRule, context: any) {
+  private executeActions(rule: IFTTTRule, context: any, event: NormalizedStreamEvent) {
     for (const action of rule.actions) {
       console.log(`[RuleEngine] ACTION DISPATCHED: Type "${action.type}" via Rule "${rule.name}" for @${context.user?.username || 'user'}`);
 
@@ -156,6 +166,21 @@ export class RuleEngine {
           buddy_type: action.buddyType || context.user?.buddy_type || 'circle'
         }
       };
+
+      // Buddies exist only because a rule fired: attach provenance, lifetime and exit behavior
+      if (action.type === 'spawn_buddy') {
+        const buddySettings = db.getSettings().buddies;
+        const spawn: BuddySpawnInfo = {
+          instanceId: `buddy_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          ruleId: rule.id,
+          ruleName: rule.name,
+          eventType: event.type,
+          lifetimeMs: action.buddyLifetimeMs ?? buddySettings.defaultLifetimeMs,
+          exitAnimation: action.exitAnimation ?? buddySettings.defaultExitAnimation
+        };
+        (enrichedAction as any).spawn = spawn;
+        console.log(`[RuleEngine] BUDDY SPAWN: @${context.user?.username} via rule "${rule.name}" on "${event.type}" | lifetime ${spawn.lifetimeMs}ms, exit ${spawn.exitAnimation}`);
+      }
 
       if (this.onActionGenerated) {
         this.onActionGenerated(enrichedAction);

@@ -6,6 +6,11 @@ import {
   StreamUserStats, 
   IFTTTRule, 
   RarityTier,
+  BuddySettings,
+  TopSupportersConfig,
+  SupportBucket,
+  SupportersPayload,
+  SupporterEntry,
   type BuddyType
 } from './types.ts';
 
@@ -24,10 +29,33 @@ export interface DatabaseSchema {
     bossFightScheduleMinutes: number;
     pachinkoEnabled: boolean;
     maxBuddiesOnScreen: number;
+    showChat: boolean;
     streamerTiktokUsername: string;
     tiktokSessionId?: string;
+    buddies: BuddySettings;
+    topSupporters: TopSupportersConfig;
   };
+  supportLedger: SupportBucket[];
 }
+
+export const DEFAULT_BUDDY_SETTINGS: BuddySettings = {
+  defaultLifetimeMs: 10000,
+  defaultExitAnimation: 'fade',
+  overflowBehavior: 'queue',
+  maxQueue: 8
+};
+
+export const DEFAULT_TOP_SUPPORTERS: TopSupportersConfig = {
+  enabled: true,
+  criteria: 'tips',
+  window: 'last_stream',
+  minValue: 1,
+  maxEntries: 4,
+  weights: { tip: 1, sub: 500, bit: 0.01, chat: 0.5 }
+};
+
+const HOUR_MS = 3600000;
+const LEDGER_RETENTION_MS = 400 * 24 * HOUR_MS;
 
 const DEFAULT_PRESET_TRIGGERS: IFTTTRule[] = [
   {
@@ -281,10 +309,14 @@ class Database {
         bossFightEnabled: true,
         bossFightScheduleMinutes: 15,
         pachinkoEnabled: true,
-        maxBuddiesOnScreen: 20,
+        maxBuddiesOnScreen: 8,
+        showChat: false,
         streamerTiktokUsername: 'babyboss.theshadow',
-        tiktokSessionId: ''
-      }
+        tiktokSessionId: '',
+        buddies: { ...DEFAULT_BUDDY_SETTINGS },
+        topSupporters: { ...DEFAULT_TOP_SUPPORTERS, weights: { ...DEFAULT_TOP_SUPPORTERS.weights } }
+      },
+      supportLedger: []
     };
   }
 
@@ -310,6 +342,18 @@ class Database {
         if (!parsed.triggers || parsed.triggers.length === 0) {
           parsed.triggers = DEFAULT_PRESET_TRIGGERS;
         }
+        // Migrate older db.json files that predate buddy / supporter settings
+        parsed.settings = {
+          showChat: false,
+          ...parsed.settings,
+          buddies: { ...DEFAULT_BUDDY_SETTINGS, ...(parsed.settings?.buddies || {}) },
+          topSupporters: {
+            ...DEFAULT_TOP_SUPPORTERS,
+            ...(parsed.settings?.topSupporters || {}),
+            weights: { ...DEFAULT_TOP_SUPPORTERS.weights, ...(parsed.settings?.topSupporters?.weights || {}) }
+          }
+        };
+        if (!Array.isArray(parsed.supportLedger)) parsed.supportLedger = [];
         return parsed;
       }
     } catch (err) {
@@ -570,8 +614,93 @@ class Database {
   }
 
   updateSettings(settings: Partial<DatabaseSchema['settings']>) {
-    this.data.settings = { ...this.data.settings, ...settings };
+    const cur = this.data.settings;
+    this.data.settings = {
+      ...cur,
+      ...settings,
+      buddies: { ...cur.buddies, ...(settings.buddies || {}) },
+      topSupporters: {
+        ...cur.topSupporters,
+        ...(settings.topSupporters || {}),
+        weights: { ...cur.topSupporters.weights, ...(settings.topSupporters?.weights || {}) }
+      }
+    };
     this.save();
+  }
+
+  // Support ledger + Top Supporters
+  recordSupport(
+    streamId: string,
+    userId: string,
+    delta: { tips?: number; subs?: number; bits?: number; chats?: number }
+  ) {
+    const hour = Math.floor(Date.now() / HOUR_MS) * HOUR_MS;
+    const ledger = this.data.supportLedger;
+    let bucket = ledger.length ? ledger[ledger.length - 1] : undefined;
+    if (!bucket || bucket.hour !== hour || bucket.streamId !== streamId || bucket.userId !== userId) {
+      bucket = ledger.find(b => b.hour === hour && b.streamId === streamId && b.userId === userId);
+    }
+    if (!bucket) {
+      bucket = { hour, streamId, userId, tips: 0, subs: 0, bits: 0, chats: 0 };
+      ledger.push(bucket);
+      const cutoff = Date.now() - LEDGER_RETENTION_MS;
+      if (ledger.length > 5000 && ledger[0].hour < cutoff) {
+        this.data.supportLedger = ledger.filter(b => b.hour >= cutoff);
+      }
+    }
+    bucket.tips += delta.tips || 0;
+    bucket.subs += delta.subs || 0;
+    bucket.bits += delta.bits || 0;
+    bucket.chats += delta.chats || 0;
+    this.save();
+  }
+
+  // Returns viewers who meet the configured criteria, best first. Empty => box stays hidden.
+  getTopSupporters(): SupportersPayload {
+    const cfg = this.data.settings.topSupporters;
+    const base = { enabled: cfg.enabled, criteria: cfg.criteria, window: cfg.window };
+    if (!cfg.enabled) return { ...base, entries: [] };
+
+    const now = Date.now();
+    const windowMs = cfg.window === 'last_7_days' ? 7 * 24 * HOUR_MS
+      : cfg.window === 'last_30_days' ? 30 * 24 * HOUR_MS : 0;
+    const streamId = this.data.currentStreamId;
+
+    const totals = new Map<string, { tips: number; subs: number; bits: number; chats: number }>();
+    for (const b of this.data.supportLedger) {
+      if (cfg.window === 'last_stream' && b.streamId !== streamId) continue;
+      if (windowMs && b.hour + HOUR_MS < now - windowMs) continue;
+      const t = totals.get(b.userId) || { tips: 0, subs: 0, bits: 0, chats: 0 };
+      t.tips += b.tips; t.subs += b.subs; t.bits += b.bits; t.chats += b.chats;
+      totals.set(b.userId, t);
+    }
+
+    const w = cfg.weights;
+    const entries: SupporterEntry[] = [];
+    for (const [userId, t] of totals) {
+      const user = this.data.users[userId];
+      if (!user) continue;
+      let value = 0;
+      switch (cfg.criteria) {
+        case 'tips': value = t.tips; break;
+        case 'gifted_subs': value = t.subs; break;
+        case 'bits': value = t.bits; break;
+        case 'support_score':
+          value = t.tips * w.tip + t.subs * w.sub + t.bits * w.bit + t.chats * w.chat;
+          break;
+      }
+      value = Math.round(value * 100) / 100;
+      if (value <= 0 || value < cfg.minValue) continue;
+      entries.push({
+        userId,
+        username: user.username,
+        pfpUrl: user.pfp_url,
+        value,
+        tier: user.rarity_tier || 'common'
+      });
+    }
+    entries.sort((a, b) => b.value - a.value);
+    return { ...base, entries: entries.slice(0, Math.max(1, cfg.maxEntries)) };
   }
 
   // Wipe Data: clears sample users, resets stream session and counters
@@ -595,6 +724,7 @@ class Database {
     this.data.streamUserStats = {
       [streamId]: {}
     };
+    this.data.supportLedger = [];
     if (options?.resetRules) {
       this.data.triggers = DEFAULT_PRESET_TRIGGERS;
     }

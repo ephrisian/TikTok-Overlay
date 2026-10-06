@@ -165,6 +165,67 @@ export interface TriggerAction {
   mediaUrl?: string;
   soundName?: string;
   pachinkoRarity?: RarityTier;
+  // Buddy overrides (fall back to settings.buddies defaults)
+  buddyLifetimeMs?: number;
+  exitAnimation?: BuddyExitAnimation;
+}
+
+export type BuddyExitAnimation = 'fade' | 'slide' | 'shrink';
+
+// Provenance + lifetime attached by the rule engine to every spawn_buddy action
+export interface BuddySpawnInfo {
+  instanceId: string;
+  ruleId: string;
+  ruleName: string;
+  eventType: StreamEventType;
+  lifetimeMs: number;
+  exitAnimation: BuddyExitAnimation;
+}
+
+export interface BuddySettings {
+  defaultLifetimeMs: number;
+  defaultExitAnimation: BuddyExitAnimation;
+  overflowBehavior: 'queue' | 'replace_oldest';
+  maxQueue: number;
+}
+
+export type SupporterCriteria = 'tips' | 'gifted_subs' | 'bits' | 'support_score';
+export type SupporterWindow = 'last_stream' | 'last_7_days' | 'last_30_days' | 'all_time';
+
+export interface TopSupportersConfig {
+  enabled: boolean;
+  criteria: SupporterCriteria;
+  window: SupporterWindow;
+  minValue: number; // a viewer must reach this value to qualify
+  maxEntries: number;
+  // support_score = tips*tipWeight + subs*subWeight + cheers*bitWeight + chats*chatWeight
+  weights: { tip: number; sub: number; bit: number; chat: number };
+}
+
+export interface SupporterEntry {
+  userId: string;
+  username: string;
+  pfpUrl: string;
+  value: number;
+  tier: RarityTier;
+}
+
+export interface SupportersPayload {
+  enabled: boolean;
+  criteria: SupporterCriteria;
+  window: SupporterWindow;
+  entries: SupporterEntry[];
+}
+
+// Hourly per-viewer support totals, so time windows can be evaluated later
+export interface SupportBucket {
+  hour: number; // epoch ms floored to the hour
+  streamId: string;
+  userId: string;
+  tips: number; // gift diamonds
+  subs: number; // gifted subs / memberships
+  bits: number; // cheers (likes taps) - TikTok's bits equivalent
+  chats: number;
 }
 
 export interface IFTTTRule {
@@ -256,6 +317,8 @@ export interface WsMessage {
     | 'boss_attack_vfx'
     | 'pachinko_drop'
     | 'buddy_update'
+    | 'supporters_update'
+    | 'settings_update'
     | 'leaderboard_update'
     | 'connector_status'
     | 'stats_update'
