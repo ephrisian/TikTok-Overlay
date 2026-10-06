@@ -1,0 +1,6 @@
+{
+  "name": "TikTok Stream Overlay Orchestrator",
+  "description": "Local-first TikTok stream overlay orchestrator with TikTok Live Connector, OBS Browser Source, Fabric.js canvas, Pachinko drop, Boss Fight mode, Stream CRM, and IFTTT rule engine.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

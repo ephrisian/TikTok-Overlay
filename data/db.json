@@ -1,0 +1,368 @@
+{
+  "users": {
+    "sim_cyberghost94": {
+      "id": "sim_cyberghost94",
+      "username": "CyberGhost94",
+      "nickname": "CyberGhost94",
+      "pfp_url": "https://api.dicebear.com/7.x/bottts/svg?seed=CyberGhost94",
+      "first_seen": 1790909140285,
+      "last_seen": 1790909140285,
+      "total_watch_time_ms": 180000,
+      "streams_attended": 1,
+      "total_chat_messages": 0,
+      "total_likes": 0,
+      "total_gifts": 0,
+      "rarity_tier": "common",
+      "glow_color": "#10b981",
+      "buddy_type": "circle",
+      "seat_index": 0
+    },
+    "sim_zenmaster": {
+      "id": "sim_zenmaster",
+      "username": "ZenMaster",
+      "nickname": "ZenMaster",
+      "pfp_url": "https://api.dicebear.com/7.x/bottts/svg?seed=ZenMaster",
+      "first_seen": 1791252402008,
+      "last_seen": 1791252402008,
+      "total_watch_time_ms": 225000,
+      "streams_attended": 1,
+      "total_chat_messages": 1,
+      "total_likes": 0,
+      "total_gifts": 0,
+      "rarity_tier": "common",
+      "glow_color": "#10b981",
+      "buddy_type": "circle",
+      "seat_index": 1
+    },
+    "sim_shadowwolf99": {
+      "id": "sim_shadowwolf99",
+      "username": "ShadowWolf99",
+      "nickname": "ShadowWolf99",
+      "pfp_url": "https://api.dicebear.com/7.x/bottts/svg?seed=ShadowWolf99",
+      "first_seen": 1791252410152,
+      "last_seen": 1791252410152,
+      "total_watch_time_ms": 210000,
+      "streams_attended": 1,
+      "total_chat_messages": 1,
+      "total_likes": 0,
+      "total_gifts": 0,
+      "rarity_tier": "common",
+      "glow_color": "#10b981",
+      "buddy_type": "circle",
+      "seat_index": 2
+    },
+    "sim_pixelsamurai": {
+      "id": "sim_pixelsamurai",
+      "username": "PixelSamurai",
+      "nickname": "PixelSamurai",
+      "pfp_url": "https://api.dicebear.com/7.x/bottts/svg?seed=PixelSamurai",
+      "first_seen": 1791252410870,
+      "last_seen": 1791252410870,
+      "total_watch_time_ms": 210000,
+      "streams_attended": 1,
+      "total_chat_messages": 1,
+      "total_likes": 0,
+      "total_gifts": 0,
+      "rarity_tier": "common",
+      "glow_color": "#10b981",
+      "buddy_type": "circle",
+      "seat_index": 3
+    },
+    "sim_testuser": {
+      "id": "sim_testuser",
+      "username": "TestUser",
+      "nickname": "TestUser",
+      "pfp_url": "https://api.dicebear.com/7.x/bottts/svg?seed=TestUser",
+      "first_seen": 1791252411036,
+      "last_seen": 1791252411036,
+      "total_watch_time_ms": 210000,
+      "streams_attended": 1,
+      "total_chat_messages": 1,
+      "total_likes": 0,
+      "total_gifts": 0,
+      "rarity_tier": "common",
+      "glow_color": "#10b981",
+      "buddy_type": "circle",
+      "seat_index": 4
+    }
+  },
+  "currentStreamId": "stream_1790909102742",
+  "streams": {
+    "stream_1790909102742": {
+      "id": "stream_1790909102742",
+      "started_at": 1790909102742,
+      "ended_at": null,
+      "title": "New Clean Live Session",
+      "total_viewers": 5,
+      "total_likes": 0,
+      "total_gifts": 0,
+      "total_chats": 4,
+      "is_active": true
+    }
+  },
+  "streamUserStats": {
+    "stream_1790909102742": {
+      "sim_cyberghost94": {
+        "stream_id": "stream_1790909102742",
+        "user_id": "sim_cyberghost94",
+        "first_join_at": 1790909140286,
+        "last_seen_at": 1790909311350,
+        "watch_time_ms": 180000,
+        "likes": 0,
+        "gifts": 0,
+        "chats": 0,
+        "shares": 0
+      },
+      "sim_zenmaster": {
+        "stream_id": "stream_1790909102742",
+        "user_id": "sim_zenmaster",
+        "first_join_at": 1791252402008,
+        "last_seen_at": 1791252636572,
+        "watch_time_ms": 225000,
+        "likes": 0,
+        "gifts": 0,
+        "chats": 1,
+        "shares": 0
+      },
+      "sim_shadowwolf99": {
+        "stream_id": "stream_1790909102742",
+        "user_id": "sim_shadowwolf99",
+        "first_join_at": 1791252410153,
+        "last_seen_at": 1791252636573,
+        "watch_time_ms": 210000,
+        "likes": 0,
+        "gifts": 0,
+        "chats": 1,
+        "shares": 0
+      },
+      "sim_pixelsamurai": {
+        "stream_id": "stream_1790909102742",
+        "user_id": "sim_pixelsamurai",
+        "first_join_at": 1791252410871,
+        "last_seen_at": 1791252636573,
+        "watch_time_ms": 210000,
+        "likes": 0,
+        "gifts": 0,
+        "chats": 1,
+        "shares": 0
+      },
+      "sim_testuser": {
+        "stream_id": "stream_1790909102742",
+        "user_id": "sim_testuser",
+        "first_join_at": 1791252411036,
+        "last_seen_at": 1791252636573,
+        "watch_time_ms": 210000,
+        "likes": 0,
+        "gifts": 0,
+        "chats": 1,
+        "shares": 0
+      }
+    }
+  },
+  "triggers": [
+    {
+      "id": "rule_first_time_join",
+      "name": "First-Time Viewer Welcome + Pachinko Drop",
+      "enabled": true,
+      "condition": {
+        "all": [
+          {
+            "field": "event.type",
+            "op": "equals",
+            "value": "join"
+          },
+          {
+            "field": "user.firstTime",
+            "op": "equals",
+            "value": true
+          }
+        ]
+      },
+      "actions": [
+        {
+          "type": "show_group",
+          "groupId": "welcome_first_time",
+          "durationMs": 6000,
+          "textOverrides": {
+            "title": "NEW VIEWER ARRIVED!",
+            "username": "{{user.username}}"
+          }
+        },
+        {
+          "type": "trigger_pachinko",
+          "durationMs": 4000
+        },
+        {
+          "type": "spawn_buddy",
+          "buddyType": "circle",
+          "entryAnimation": "drop_from_top"
+        }
+      ]
+    },
+    {
+      "id": "rule_returning_stream_join",
+      "name": "Returning Viewer (New Stream)",
+      "enabled": true,
+      "condition": {
+        "all": [
+          {
+            "field": "event.type",
+            "op": "equals",
+            "value": "join"
+          },
+          {
+            "field": "user.firstTime",
+            "op": "equals",
+            "value": false
+          },
+          {
+            "field": "user.firstTimeThisStream",
+            "op": "equals",
+            "value": true
+          }
+        ]
+      },
+      "actions": [
+        {
+          "type": "show_group",
+          "groupId": "welcome_back_stream",
+          "durationMs": 4500,
+          "textOverrides": {
+            "title": "WELCOME BACK!",
+            "username": "{{user.username}}"
+          }
+        },
+        {
+          "type": "spawn_buddy",
+          "buddyType": "shield",
+          "entryAnimation": "zoom_in"
+        }
+      ]
+    },
+    {
+      "id": "rule_returning_from_break",
+      "name": "Returning From Break (> 5 min away)",
+      "enabled": true,
+      "condition": {
+        "all": [
+          {
+            "field": "event.type",
+            "op": "equals",
+            "value": "join"
+          },
+          {
+            "field": "user.returningFromBreak",
+            "op": "equals",
+            "value": true
+          },
+          {
+            "field": "event.timeAwayMs",
+            "op": "greater_than",
+            "value": 300000
+          }
+        ]
+      },
+      "actions": [
+        {
+          "type": "show_group",
+          "groupId": "bathroom_break_joke",
+          "durationMs": 5000,
+          "textOverrides": {
+            "title": "BRB SURVIVED!",
+            "username": "{{user.username}} has returned!"
+          }
+        },
+        {
+          "type": "tween_buddy",
+          "tweenType": "bounce"
+        }
+      ]
+    },
+    {
+      "id": "rule_like_burst_milestone",
+      "name": "Updated 100 Likes Storm",
+      "enabled": true,
+      "condition": {
+        "all": [
+          {
+            "field": "event.type",
+            "op": "equals",
+            "value": "like_burst"
+          },
+          {
+            "field": "event.count",
+            "op": "greater_or_equal",
+            "value": 100
+          }
+        ]
+      },
+      "actions": [
+        {
+          "type": "tween_buddy",
+          "tweenType": "grow"
+        }
+      ]
+    },
+    {
+      "id": "rule_gift_celebration",
+      "name": "Gift Shower Hype Alert",
+      "enabled": true,
+      "condition": {
+        "all": [
+          {
+            "field": "event.type",
+            "op": "equals",
+            "value": "gift"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "type": "tween_buddy",
+          "tweenType": "emote_popup"
+        },
+        {
+          "type": "show_group",
+          "groupId": "gift_alert",
+          "durationMs": 5000,
+          "textOverrides": {
+            "title": "GIFT DROP!",
+            "username": "{{user.username}} sent {{event.giftName}} x{{event.repeatCount}}"
+          }
+        },
+        {
+          "type": "update_leaderboard",
+          "leaderboardType": "gifts"
+        }
+      ]
+    },
+    {
+      "id": "rule_chat_animation",
+      "name": "Chatter Bounce & Speech Bubble",
+      "enabled": true,
+      "condition": {
+        "all": [
+          {
+            "field": "event.type",
+            "op": "equals",
+            "value": "chat"
+          }
+        ]
+      },
+      "actions": [
+        {
+          "type": "tween_buddy",
+          "tweenType": "bounce"
+        }
+      ]
+    }
+  ],
+  "settings": {
+    "overlayAspect": "9:16",
+    "bossFightEnabled": true,
+    "bossFightScheduleMinutes": 15,
+    "pachinkoEnabled": true,
+    "maxBuddiesOnScreen": 20,
+    "streamerTiktokUsername": "streamer"
+  }
+}
