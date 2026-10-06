@@ -7,30 +7,17 @@ import {
 import { eventsRouter } from './eventsRouter.ts';
 import { streamStatsEngine } from './streamStatsEngine.ts';
 import { ConnectorState, ConnectorStatus } from './types.ts';
+import { db } from './db.ts';
 
-// 100% Free Direct Mode: Disable external provider fallbacks and signing server routes
+// Defensive patch to prevent TypeError: Cannot read properties of undefined (reading 'messages')
 try {
-  if (RoomIdRouteConfig) {
-    (RoomIdRouteConfig as any).skipFetchRoomIdFromEulerRoute = true;
-  }
-  if (IsLiveRouteConfig) {
-    (IsLiveRouteConfig as any).skipFetchRoomIdFromEulerRoute = true;
-  }
-  if (RouteConfig) {
-    (RouteConfig as any).fetchWebcastSignatureFromProvider = async () => ({
-      response: {}
-    });
-    (RouteConfig as any).fetchSignedWebSocketFromProvider = async () => ({
-      response: {}
-    });
-    (RouteConfig as any).fetchRoomIdFromProvider = async () => {
-      throw new Error('External provider disabled');
-    };
-    (RouteConfig as any).fetchRoomInfoFromProvider = async () => {
-      throw new Error('External provider disabled');
-    };
-    (RouteConfig as any).fetchRoomGiftsFromProvider = async () => {
-      throw new Error('External provider disabled');
+  const origProcessProto = (TikTokLiveConnection as any).prototype?.processProtoMessageFetchResult;
+  if (origProcessProto) {
+    (TikTokLiveConnection as any).prototype.processProtoMessageFetchResult = async function (result: any) {
+      if (!result || !Array.isArray(result?.messages)) {
+        return;
+      }
+      return origProcessProto.call(this, result);
     };
   }
 } catch (_) {}
@@ -66,7 +53,7 @@ export class TikTokClientManager {
   private tiktokConnection: TikTokLiveConnection | null = null;
   private state: ConnectorState = {
     status: 'disconnected',
-    username: '',
+    username: 'babyboss.theshadow',
     viewerCount: 18,
     lastEventAt: Date.now()
   };
@@ -93,33 +80,64 @@ export class TikTokClientManager {
       this.tiktokConnection = null;
     }
 
+    const effectiveSessionId = (options?.sessionId !== undefined 
+      ? options.sessionId 
+      : db.getSettings().tiktokSessionId)?.trim();
+
     this.state = {
       status: 'connecting',
       username,
       viewerCount: this.state.viewerCount,
       lastEventAt: Date.now(),
       errorMessage: undefined,
-      sessionId: options?.sessionId
+      sessionId: effectiveSessionId
     };
     this.notify();
 
     try {
       const connConfig: any = {
-        processInitialData: true,
+        processInitialData: false,
         enableExtendedGiftInfo: false,
         enableRequestPolling: true,
         requestPollingIntervalMs: 1000
       };
 
-      if (options?.sessionId) {
-        connConfig.sessionId = options.sessionId;
+      if (effectiveSessionId) {
+        connConfig.sessionId = effectiveSessionId;
       }
 
       this.tiktokConnection = new TikTokLiveConnection(username, connConfig);
 
+      // Explicitly ensure cookieJar store includes all passed cookies and sessionid
+      if (effectiveSessionId && (this.tiktokConnection as any).webClient?.cookieJar?.store) {
+        const jarStore = (this.tiktokConnection as any).webClient.cookieJar.store;
+        if (effectiveSessionId.includes('=')) {
+          const pairs = effectiveSessionId.replace(/^Cookie:\s*/i, '').split(';');
+          for (const pair of pairs) {
+            const parts = pair.trim().split('=');
+            if (parts.length >= 2) {
+              const name = parts[0].trim().replace(/^[^\w-]+/, '');
+              const val = parts.slice(1).join('=').trim();
+              if (name && val) {
+                jarStore[name] = val;
+              }
+            }
+          }
+        } else {
+          jarStore['sessionid'] = effectiveSessionId;
+        }
+      }
+
       this.bindEvents(this.tiktokConnection, username);
 
-      const state = await this.tiktokConnection.connect();
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Connection timed out. Streamer is currently offline or unreachable.')), 25000);
+      });
+
+      const state = (await Promise.race([
+        this.tiktokConnection.connect(),
+        timeoutPromise
+      ])) as any;
 
       this.state = {
         status: 'connected',
@@ -143,7 +161,10 @@ export class TikTokClientManager {
         msg.includes('not online') || 
         msg.includes('offline') || 
         msg.includes('LIVE has ended') ||
-        msg.includes('Failed to retrieve Room ID')
+        msg.includes('Failed to retrieve Room ID') ||
+        msg.includes('WebSocket') ||
+        msg.includes('timed out') ||
+        msg.includes('Room ID')
       ) {
         cleanStatus = 'offline';
         userFriendlyMessage = `@${username} is not currently live on TikTok. Switch to the built-in Offline Live Simulator below to test all overlay interactions!`;
@@ -190,74 +211,101 @@ export class TikTokClientManager {
 
     conn.on('chat', (data: any) => {
       this.state.lastEventAt = Date.now();
+      const userId = String(data.user?.id || data.userId || data.uniqueId || 'viewer');
+      const sender = data.user?.displayId || data.user?.nickname || data.uniqueId || data.nickname || 'Viewer';
+      const comment = data.content || data.comment || '';
+      const pfpUrl = data.user?.avatarThumb?.urlList?.[0] || data.profilePictureUrl;
       eventsRouter.handleChat({
-        userId: String(data.userId || data.uniqueId || 'viewer'),
-        username: data.uniqueId || data.nickname || 'Viewer',
-        comment: data.comment || '',
-        pfpUrl: data.profilePictureUrl
+        userId,
+        username: sender,
+        comment,
+        pfpUrl
       });
       this.notify();
     });
 
     conn.on('like', (data: any) => {
       this.state.lastEventAt = Date.now();
+      const userId = String(data.user?.id || data.userId || data.uniqueId || 'viewer');
+      const sender = data.user?.displayId || data.user?.nickname || data.uniqueId || data.nickname || 'Viewer';
+      const pfpUrl = data.user?.avatarThumb?.urlList?.[0] || data.profilePictureUrl;
+      const likeCount = data.count || data.likeCount || 1;
+      const totalLikes = data.total || data.totalLikeCount;
       eventsRouter.handleLike({
-        userId: String(data.userId || data.uniqueId || 'viewer'),
-        username: data.uniqueId || data.nickname || 'Viewer',
-        likeCount: data.likeCount || 1,
-        totalLikes: data.totalLikeCount,
-        pfpUrl: data.profilePictureUrl
+        userId,
+        username: sender,
+        likeCount,
+        totalLikes,
+        pfpUrl
       });
       this.notify();
     });
 
     conn.on('gift', (data: any) => {
       this.state.lastEventAt = Date.now();
+      const userId = String(data.user?.id || data.userId || data.uniqueId || 'viewer');
+      const sender = data.user?.displayId || data.user?.nickname || data.uniqueId || data.nickname || 'Viewer';
+      const pfpUrl = data.user?.avatarThumb?.urlList?.[0] || data.profilePictureUrl;
+      const giftId = data.gift?.id || data.giftId || 1;
+      const giftName = data.gift?.name || data.giftName || 'Gift';
+      const diamondCount = data.gift?.diamondCount || data.diamondCount || 1;
+      const repeatCount = data.repeatCount || data.groupCount || 1;
       eventsRouter.handleGift({
-        userId: String(data.userId || data.uniqueId || 'viewer'),
-        username: data.uniqueId || data.nickname || 'Viewer',
-        giftId: data.giftId || 1,
-        giftName: data.giftName || 'Gift',
-        diamondCount: data.diamondCount || 1,
-        repeatCount: data.repeatCount || 1,
-        pfpUrl: data.profilePictureUrl
+        userId,
+        username: sender,
+        giftId,
+        giftName,
+        diamondCount,
+        repeatCount,
+        pfpUrl
       });
       this.notify();
     });
 
     conn.on('member', (data: any) => {
       this.state.lastEventAt = Date.now();
+      const userId = String(data.user?.id || data.userId || data.uniqueId || 'viewer');
+      const sender = data.user?.displayId || data.user?.nickname || data.uniqueId || data.nickname || 'Viewer';
+      const nickname = data.user?.nickname || data.nickname;
+      const pfpUrl = data.user?.avatarThumb?.urlList?.[0] || data.profilePictureUrl;
       eventsRouter.handleJoin({
-        userId: String(data.userId || data.uniqueId || 'viewer'),
-        username: data.uniqueId || data.nickname || 'Viewer',
-        nickname: data.nickname,
-        pfpUrl: data.profilePictureUrl
+        userId,
+        username: sender,
+        nickname,
+        pfpUrl
       });
       this.notify();
     });
 
     conn.on('follow', (data: any) => {
       this.state.lastEventAt = Date.now();
+      const userId = String(data.user?.id || data.userId || data.uniqueId || 'viewer');
+      const sender = data.user?.displayId || data.user?.nickname || data.uniqueId || data.nickname || 'Viewer';
+      const pfpUrl = data.user?.avatarThumb?.urlList?.[0] || data.profilePictureUrl;
       eventsRouter.handleFollow({
-        userId: String(data.userId || data.uniqueId || 'viewer'),
-        username: data.uniqueId || data.nickname || 'Viewer',
-        pfpUrl: data.profilePictureUrl
+        userId,
+        username: sender,
+        pfpUrl
       });
     });
 
     conn.on('share', (data: any) => {
       this.state.lastEventAt = Date.now();
+      const userId = String(data.user?.id || data.userId || data.uniqueId || 'viewer');
+      const sender = data.user?.displayId || data.user?.nickname || data.uniqueId || data.nickname || 'Viewer';
+      const pfpUrl = data.user?.avatarThumb?.urlList?.[0] || data.profilePictureUrl;
       eventsRouter.handleShare({
-        userId: String(data.userId || data.uniqueId || 'viewer'),
-        username: data.uniqueId || data.nickname || 'Viewer',
-        pfpUrl: data.profilePictureUrl
+        userId,
+        username: sender,
+        pfpUrl
       });
     });
 
     conn.on('roomUser', (data: any) => {
-      if (data?.viewerCount) {
-        this.state.viewerCount = data.viewerCount;
-        streamStatsEngine.onViewerCount(data.viewerCount);
+      const count = data?.viewerCount || data?.userCount || data?.count;
+      if (count) {
+        this.state.viewerCount = count;
+        streamStatsEngine.onViewerCount(count);
         this.notify();
       }
     });

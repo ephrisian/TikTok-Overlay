@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, 
   Square, 
@@ -26,7 +26,12 @@ import {
   Trash2,
   RotateCcw,
   AlertTriangle,
-  BarChart3
+  BarChart3,
+  Key,
+  CheckCircle2,
+  LogIn,
+  LogOut,
+  Search
 } from 'lucide-react';
 import { FabricOverlay } from '../overlay/FabricOverlay.tsx';
 import { LiveStreamStatsPanel } from './LiveStreamStatsPanel.tsx';
@@ -50,11 +55,13 @@ export const StreamerDashboard: React.FC = () => {
   // Live state from backend
   const [connector, setConnector] = useState<ConnectorState>({
     status: 'disconnected',
-    username: 'gaminglive',
+    username: 'babyboss.theshadow',
     viewerCount: 24,
     lastEventAt: Date.now()
   });
-  const [usernameInput, setUsernameInput] = useState('gaminglive');
+  const [usernameInput, setUsernameInput] = useState('babyboss.theshadow');
+  const usernameInitializedRef = useRef(false);
+  const isUserTypingRef = useRef(false);
   const [isAutoSimActive, setIsAutoSimActive] = useState(false);
   const [users, setUsers] = useState<TikTokUser[]>([]);
   const [triggers, setTriggers] = useState<IFTTTRule[]>([]);
@@ -73,6 +80,104 @@ export const StreamerDashboard: React.FC = () => {
   const [simSelectedGift, setSimSelectedGift] = useState('Galaxy 🌌');
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [customSessionId, setCustomSessionId] = useState('');
+
+  // TikTok Session ID & Cookie Authentication State
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [cookieScanStatus, setCookieScanStatus] = useState<string | null>(null);
+  const [hasStoredSession, setHasStoredSession] = useState(false);
+  const [maskedSession, setMaskedSession] = useState<string | null>(null);
+  const [rawCookieInput, setRawCookieInput] = useState('');
+  const [copiedSnippet, setCopiedSnippet] = useState(false);
+
+  // Extract clean sessionid from any cookie string, key-value pair, or header
+  const extractSessionId = (input: string): string => {
+    if (!input) return '';
+    const trimmed = input.trim();
+    const match = trimmed.match(/(?:^|;\s*|\b)sessionid=([^;\s]+)/i);
+    if (match) return match[1];
+    return trimmed.replace(/^sessionid\s*[:=]\s*/i, '').replace(/^[;"']+|[;"']+$/g, '');
+  };
+
+  // Check stored session from backend & localStorage
+  const checkStoredSession = async () => {
+    try {
+      const local = localStorage.getItem('tiktok_session_id');
+      if (local && !customSessionId) {
+        setCustomSessionId(local);
+      }
+      const res = await fetch('/api/connector/session');
+      if (res.ok) {
+        const data = await res.json();
+        setHasStoredSession(data.hasSession);
+        setMaskedSession(data.maskedSessionId);
+      }
+    } catch (_) {}
+  };
+
+  // Scan browser cookies and local storage
+  const scanBrowserCookies = (): string | null => {
+    try {
+      // 1. Check document.cookie
+      const docMatch = document.cookie.match(/(?:^|;\s*)(?:sessionid|session_id|sessionId|tt_session)\s*=\s*([^;]+)/i);
+      if (docMatch && docMatch[1]) {
+        const found = decodeURIComponent(docMatch[1]);
+        setCustomSessionId(found);
+        localStorage.setItem('tiktok_session_id', found);
+        setCookieScanStatus('✅ Found sessionid in browser cookies! Session updated.');
+        saveSessionToBackend(found);
+        return found;
+      }
+
+      // 2. Check localStorage
+      const local = localStorage.getItem('tiktok_session_id');
+      if (local) {
+        setCustomSessionId(local);
+        setCookieScanStatus('✅ Found sessionid in local storage! Session updated.');
+        saveSessionToBackend(local);
+        return local;
+      }
+    } catch (_) {}
+
+    setCookieScanStatus('ℹ️ No sessionid cookie found directly on this origin. Follow the 1-click guide below to import it from tiktok.com!');
+    return null;
+  };
+
+  // Save session to backend & localStorage
+  const saveSessionToBackend = async (sid: string) => {
+    const clean = extractSessionId(sid);
+    if (!clean) return;
+    try {
+      localStorage.setItem('tiktok_session_id', clean);
+      setCustomSessionId(clean);
+      const res = await fetch('/api/connector/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: clean })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHasStoredSession(data.hasSession);
+        setMaskedSession(data.maskedSessionId);
+        setCookieScanStatus('✅ Session saved! You are now authenticated as yourself.');
+      }
+    } catch (_) {}
+  };
+
+  const clearSession = async () => {
+    try {
+      localStorage.removeItem('tiktok_session_id');
+      setCustomSessionId('');
+      setRawCookieInput('');
+      await fetch('/api/connector/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: '' })
+      });
+      setHasStoredSession(false);
+      setMaskedSession(null);
+      setCookieScanStatus('Session cleared.');
+    } catch (_) {}
+  };
 
   // Rule Builder modal/form state
   const [showNewRuleModal, setShowNewRuleModal] = useState(false);
@@ -102,7 +207,12 @@ export const StreamerDashboard: React.FC = () => {
         if (data.bossState) setBossState(data.bossState);
         if (data.connectorState) {
           setConnector(data.connectorState);
-          setUsernameInput(data.connectorState.username || 'gaminglive');
+          // Only initialize username from server on initial load so background polling NEVER wipes out user input!
+          if (!usernameInitializedRef.current) {
+            const serverUsername = data.settings?.streamerTiktokUsername || data.connectorState.username || 'babyboss.theshadow';
+            setUsernameInput(serverUsername);
+            usernameInitializedRef.current = true;
+          }
         }
         setIsAutoSimActive(!!data.isAutoSimActive);
         if (data.currentStream) {
@@ -122,6 +232,7 @@ export const StreamerDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchState();
+    checkStoredSession();
     const interval = setInterval(fetchState, 4000);
     return () => clearInterval(interval);
   }, []);
@@ -674,8 +785,14 @@ export const StreamerDashboard: React.FC = () => {
                     <input
                       type="text"
                       value={usernameInput}
-                      onChange={(e) => setUsernameInput(e.target.value)}
-                      placeholder="TikTok username (e.g. gaminglive)"
+                      onChange={(e) => {
+                        setUsernameInput(e.target.value);
+                        isUserTypingRef.current = true;
+                      }}
+                      onBlur={() => {
+                        isUserTypingRef.current = false;
+                      }}
+                      placeholder="TikTok username (e.g. babyboss.theshadow)"
                       className="w-full pl-7 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
                     />
                   </div>
@@ -699,6 +816,87 @@ export const StreamerDashboard: React.FC = () => {
                   )}
                 </div>
 
+                {/* Streamer Account Authentication & Cookie Status Bar */}
+                <div className="mt-3 p-3 bg-slate-950/90 border border-slate-800 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="flex items-start sm:items-center gap-2.5">
+                    <span className={`p-2 rounded-xl border ${
+                      hasStoredSession || customSessionId
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                        : 'bg-pink-500/10 border-pink-500/30 text-pink-400'
+                    }`}>
+                      <Key className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <div className="font-semibold text-slate-200 flex items-center gap-2">
+                        {hasStoredSession || customSessionId ? (
+                          <>
+                            <span className="text-emerald-400 flex items-center gap-1 font-bold">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Streamer Session Authenticated
+                            </span>
+                            <span className="font-mono text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                              {maskedSession || (customSessionId ? `${customSessionId.slice(0, 4)}...${customSessionId.slice(-4)}` : 'Active')}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-slate-300 font-bold">
+                            Login as Streamer (Optional Session Cookie)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {hasStoredSession || customSessionId
+                          ? 'Requests authenticated as streamer. Bypasses age restrictions and pulls private stream data.'
+                          : 'Authenticate with your TikTok sessionid cookie to allow the tool to pull restricted or age-gated stream data.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => scanBrowserCookies()}
+                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-[11px] font-semibold transition flex items-center gap-1.5 border border-slate-700/60"
+                      title="Scan document.cookie and localStorage for sessionid"
+                    >
+                      <Search className="w-3.5 h-3.5 text-cyan-400" />
+                      Scan Cookies
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginModal(true)}
+                      className="px-3 py-1.5 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 shadow-md shadow-pink-600/20"
+                    >
+                      <LogIn className="w-3.5 h-3.5" />
+                      {hasStoredSession || customSessionId ? 'Manage Session' : 'Login / Set Session'}
+                    </button>
+
+                    {(hasStoredSession || customSessionId) && (
+                      <button
+                        type="button"
+                        onClick={clearSession}
+                        className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-[11px] transition"
+                        title="Clear stored session cookie"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {cookieScanStatus && (
+                  <div className="mt-2 text-xs text-slate-200 bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between">
+                    <span>{cookieScanStatus}</span>
+                    <button
+                      onClick={() => setCookieScanStatus(null)}
+                      className="text-slate-400 hover:text-slate-200 text-xs px-1"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+
                 {/* Optional Session ID Settings Toggle */}
                 <div className="mt-2.5">
                   <button
@@ -706,24 +904,52 @@ export const StreamerDashboard: React.FC = () => {
                     onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
                     className="text-[11px] text-cyan-400 hover:text-cyan-300 font-medium flex items-center gap-1"
                   >
-                    <span>{showAdvancedSettings ? '▼ Hide' : '▶ Show'} Advanced Settings (Optional Session ID / Cookie)</span>
+                    <span>{showAdvancedSettings ? '▼ Hide' : '▶ Show'} Advanced Settings (Direct Session ID / Cookie Editor)</span>
                   </button>
 
                   {showAdvancedSettings && (
-                    <div className="mt-2 p-3 bg-slate-950 rounded-xl border border-slate-800 flex flex-col gap-2 text-xs">
+                    <div className="mt-2 p-3 bg-slate-950 rounded-xl border border-slate-800 flex flex-col gap-2.5 text-xs">
                       <div>
-                        <label className="text-slate-300 font-semibold block mb-1">
-                          TikTok Session ID (Optional — for age-restricted or private streams):
-                        </label>
-                        <input
-                          type="password"
-                          value={customSessionId}
-                          onChange={(e) => setCustomSessionId(e.target.value)}
-                          placeholder="sessionid=..."
-                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-100 font-mono text-[11px] focus:outline-none focus:border-cyan-500"
-                        />
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-slate-300 font-semibold block">
+                            TikTok Session ID (sessionid cookie):
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowLoginModal(true)}
+                            className="text-pink-400 hover:text-pink-300 text-[11px] font-medium"
+                          >
+                            How do I get my sessionid? ↗
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="password"
+                            value={customSessionId}
+                            onChange={(e) => setCustomSessionId(e.target.value)}
+                            placeholder="sessionid=... or raw 32-character hex key"
+                            className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-100 font-mono text-[11px] focus:outline-none focus:border-cyan-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => saveSessionToBackend(customSessionId)}
+                            disabled={!customSessionId}
+                            className="px-3 py-1.5 bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-[11px] transition"
+                          >
+                            Save
+                          </button>
+                          {customSessionId && (
+                            <button
+                              type="button"
+                              onClick={clearSession}
+                              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] transition"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
                         <p className="text-[10px] text-slate-500 mt-1">
-                          Powered by <strong className="text-slate-400">zerodytrash/TikTok-Live-Connector</strong>. Directly reads TikTok Webcast stream events without third-party API keys or signers.
+                          Powered by <strong className="text-slate-400">zerodytrash/TikTok-Live-Connector</strong>. Authenticates Webcast HTTP requests directly with TikTok servers.
                         </p>
                       </div>
                     </div>
@@ -1461,6 +1687,139 @@ export const StreamerDashboard: React.FC = () => {
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 Yes, Wipe All Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Streamer Login & Session Cookie Helper Modal */}
+      {showLoginModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-pink-500/40 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-pink-500/10 rounded-xl border border-pink-500/20 text-pink-400">
+                  <Key className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-100">Login as Streamer (Session Cookie)</h3>
+                  <p className="text-xs text-slate-400">Connect with your TikTok account to pull protected stream data</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowLoginModal(false)}
+                className="text-slate-400 hover:text-slate-200 text-lg px-2 py-1 rounded-lg hover:bg-slate-800"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Quick Option 1: Auto-Detect Browser Cookies */}
+            <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-slate-200 flex items-center gap-1.5">
+                  <Search className="w-3.5 h-3.5 text-cyan-400" />
+                  Method 1: Scan Browser Cookies
+                </span>
+                <button
+                  type="button"
+                  onClick={() => scanBrowserCookies()}
+                  className="px-3 py-1 bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold rounded-lg text-xs transition"
+                >
+                  Scan Now
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Checks your current browser cookies and local storage for an active <code className="text-cyan-300">sessionid</code>.
+              </p>
+            </div>
+
+            {/* Option 2: 1-Click Code Snippet for tiktok.com */}
+            <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800 flex flex-col gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-xs text-slate-200 flex items-center gap-1.5">
+                  <Copy className="w-3.5 h-3.5 text-pink-400" />
+                  Method 2: 1-Click DevTools Snippet (Recommended)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`copy(document.cookie.match(/sessionid=([^;]+)/)?.[1] || "Not logged in")`);
+                    setCopiedSnippet(true);
+                    setTimeout(() => setCopiedSnippet(false), 2500);
+                  }}
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-semibold transition flex items-center gap-1 border border-slate-700"
+                >
+                  {copiedSnippet ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-pink-400" />}
+                  {copiedSnippet ? 'Copied Snippet!' : 'Copy Snippet'}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                1. Open <a href="https://www.tiktok.com" target="_blank" rel="noreferrer" className="text-pink-400 hover:underline font-semibold">tiktok.com ↗</a> and make sure you are logged into your account.<br />
+                2. Press <kbd className="px-1 py-0.5 bg-slate-900 rounded text-slate-300 border border-slate-800 font-mono text-[10px]">F12</kbd> (Console tab), paste the snippet above, and hit Enter.<br />
+                3. Your <code className="text-pink-300">sessionid</code> will be automatically copied to your clipboard! Paste it below.
+              </p>
+            </div>
+
+            {/* Option 3: Manual Input or Paste Raw Cookie */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-200">
+                Paste Session ID or Full Cookie String:
+              </label>
+              <textarea
+                rows={2}
+                value={rawCookieInput}
+                onChange={(e) => setRawCookieInput(e.target.value)}
+                placeholder="Paste sessionid=... or full cookie header from DevTools"
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-100 font-mono focus:outline-none focus:border-pink-500 placeholder-slate-600 resize-none"
+              />
+              <div className="flex items-center justify-between text-[11px]">
+                <span className="text-slate-500">
+                  {rawCookieInput ? `Extracted Session: ${extractSessionId(rawCookieInput).slice(0, 8)}...` : 'Extracts sessionid automatically.'}
+                </span>
+                {rawCookieInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const extracted = extractSessionId(rawCookieInput);
+                      if (extracted) {
+                        saveSessionToBackend(extracted);
+                        setRawCookieInput('');
+                        setShowLoginModal(false);
+                      }
+                    }}
+                    className="px-3 py-1 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-lg text-xs transition"
+                  >
+                    Save & Authenticate
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {hasStoredSession && (
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-300 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  Currently authenticated with session: {maskedSession || 'Active'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => clearSession()}
+                  className="px-2 py-0.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 rounded text-[11px] font-semibold transition"
+                >
+                  Remove Cookie
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowLoginModal(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition"
+              >
+                Close
               </button>
             </div>
           </div>

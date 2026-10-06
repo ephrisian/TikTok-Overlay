@@ -25,6 +25,7 @@ export interface DatabaseSchema {
     pachinkoEnabled: boolean;
     maxBuddiesOnScreen: number;
     streamerTiktokUsername: string;
+    tiktokSessionId?: string;
   };
 }
 
@@ -313,7 +314,8 @@ class Database {
         bossFightScheduleMinutes: 15,
         pachinkoEnabled: true,
         maxBuddiesOnScreen: 20,
-        streamerTiktokUsername: 'gaminglive'
+        streamerTiktokUsername: 'babyboss.theshadow',
+        tiktokSessionId: ''
       }
     };
   }

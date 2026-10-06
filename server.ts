@@ -193,9 +193,34 @@ app.post('/api/connector/connect', async (req, res) => {
   if (!username) {
     return res.status(400).json({ error: 'Username is required' });
   }
-  db.updateSettings({ streamerTiktokUsername: username });
-  tiktokClient.connect(username, { sessionId });
+  const cleanUser = username.trim().replace(/^@/, '');
+  const cleanSessionId = typeof sessionId === 'string' ? sessionId.trim() : undefined;
+  if (cleanSessionId !== undefined) {
+    db.updateSettings({ streamerTiktokUsername: cleanUser, tiktokSessionId: cleanSessionId });
+  } else {
+    db.updateSettings({ streamerTiktokUsername: cleanUser });
+  }
+  tiktokClient.connect(cleanUser, { sessionId: cleanSessionId });
   res.json({ success: true, status: tiktokClient.getState() });
+});
+
+app.post('/api/connector/session', (req, res) => {
+  const { sessionId } = req.body;
+  const clean = typeof sessionId === 'string' ? sessionId.trim() : '';
+  db.updateSettings({ tiktokSessionId: clean });
+  res.json({ 
+    success: true, 
+    hasSession: !!clean,
+    maskedSessionId: clean ? `${clean.slice(0, 4)}...${clean.slice(-4)}` : null
+  });
+});
+
+app.get('/api/connector/session', (req, res) => {
+  const current = db.getSettings().tiktokSessionId || '';
+  res.json({
+    hasSession: !!current,
+    maskedSessionId: current ? `${current.slice(0, 4)}...${current.slice(-4)}` : null
+  });
 });
 
 app.post('/api/connector/disconnect', (req, res) => {

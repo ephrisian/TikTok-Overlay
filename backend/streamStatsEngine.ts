@@ -61,7 +61,7 @@ export interface StreamStatsSummary {
 export class LlamaXcStreamStatsEngine {
   private userStoreMap: Map<string, StreamUserData> = new Map();
   private streamId: string = 'stream_' + Date.now();
-  private streamerUsername: string = 'streamer';
+  private streamerUsername: string = 'babyboss.theshadow';
   private startTime: number = Date.now();
 
   // Cumulative room counters
