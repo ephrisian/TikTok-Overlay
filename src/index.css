@@ -1,1 +1,21 @@
 @import "tailwindcss";
+
+.fabric-overlay-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fabric-overlay-container .canvas-container {
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
+}
+
+.fabric-overlay-container canvas,
+.fabric-overlay-container .lower-canvas,
+.fabric-overlay-container .upper-canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+}

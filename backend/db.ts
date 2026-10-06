@@ -6,7 +6,7 @@ import {
   StreamUserStats, 
   IFTTTRule, 
   RarityTier,
-  BuddyType
+  type BuddyType
 } from './types.ts';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -193,6 +193,8 @@ const DEFAULT_PRESET_TRIGGERS: IFTTTRule[] = [
   }
 ];
 
+export const ENABLE_DUMMY_DATA = process.env.ENABLE_DUMMY_DATA === 'true';
+
 class Database {
   private data: DatabaseSchema;
 
@@ -202,111 +204,77 @@ class Database {
 
   private initDefaults(): DatabaseSchema {
     const streamId = 'stream_' + Date.now();
-    return {
-      users: {
-        'demo_user_1': {
-          id: 'demo_user_1',
-          username: 'NeonStreamer',
-          nickname: 'Neon',
-          pfp_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=NeonStreamer',
-          first_seen: Date.now() - 3600000 * 24 * 7,
-          last_seen: Date.now(),
-          total_watch_time_ms: 12000000,
-          streams_attended: 5,
-          total_chat_messages: 84,
-          total_likes: 920,
-          total_gifts: 15,
-          rarity_tier: 'legendary',
-          glow_color: '#f59e0b',
-          buddy_type: 'hexagon',
-          seat_index: 0
-        },
-        'demo_user_2': {
-          id: 'demo_user_2',
-          username: 'CyberKitten',
-          nickname: 'Kitten',
-          pfp_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=CyberKitten',
-          first_seen: Date.now() - 3600000 * 24 * 3,
-          last_seen: Date.now() - 10000,
-          total_watch_time_ms: 7200000,
-          streams_attended: 3,
-          total_chat_messages: 52,
-          total_likes: 450,
-          total_gifts: 8,
-          rarity_tier: 'epic',
-          glow_color: '#8b5cf6',
-          buddy_type: 'shield',
-          seat_index: 1
-        },
-        'demo_user_3': {
-          id: 'demo_user_3',
-          username: 'PixelNinja',
-          nickname: 'Ninja',
-          pfp_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=PixelNinja',
-          first_seen: Date.now() - 3600000,
-          last_seen: Date.now(),
-          total_watch_time_ms: 3600000,
-          streams_attended: 1,
-          total_chat_messages: 19,
-          total_likes: 310,
-          total_gifts: 2,
-          rarity_tier: 'rare',
-          glow_color: '#06b6d4',
-          buddy_type: 'circle',
-          seat_index: 2
-        }
+    const demoUsers: Record<string, TikTokUser> = {
+      'demo_user_1': {
+        id: 'demo_user_1',
+        username: 'NeonStreamer',
+        nickname: 'Neon',
+        pfp_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=NeonStreamer',
+        first_seen: Date.now() - 3600000 * 24 * 7,
+        last_seen: Date.now(),
+        total_watch_time_ms: 12000000,
+        streams_attended: 5,
+        total_chat_messages: 84,
+        total_likes: 920,
+        total_gifts: 15,
+        rarity_tier: 'legendary',
+        glow_color: '#f59e0b',
+        buddy_type: 'hexagon',
+        seat_index: 0
       },
+      'demo_user_2': {
+        id: 'demo_user_2',
+        username: 'CyberKitten',
+        nickname: 'Kitten',
+        pfp_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=CyberKitten',
+        first_seen: Date.now() - 3600000 * 24 * 3,
+        last_seen: Date.now() - 10000,
+        total_watch_time_ms: 7200000,
+        streams_attended: 3,
+        total_chat_messages: 52,
+        total_likes: 450,
+        total_gifts: 8,
+        rarity_tier: 'epic',
+        glow_color: '#8b5cf6',
+        buddy_type: 'shield',
+        seat_index: 1
+      },
+      'demo_user_3': {
+        id: 'demo_user_3',
+        username: 'PixelNinja',
+        nickname: 'Ninja',
+        pfp_url: 'https://api.dicebear.com/7.x/bottts/svg?seed=PixelNinja',
+        first_seen: Date.now() - 3600000,
+        last_seen: Date.now(),
+        total_watch_time_ms: 3600000,
+        streams_attended: 1,
+        total_chat_messages: 19,
+        total_likes: 310,
+        total_gifts: 2,
+        rarity_tier: 'rare',
+        glow_color: '#06b6d4',
+        buddy_type: 'circle',
+        seat_index: 2
+      }
+    };
+
+    return {
+      users: ENABLE_DUMMY_DATA ? demoUsers : {},
       currentStreamId: streamId,
       streams: {
         [streamId]: {
           id: streamId,
-          started_at: Date.now() - 1800000,
+          started_at: Date.now(),
           ended_at: null,
-          title: '🔥 Live Interactive TikTok Gaming & Boss Battles',
-          total_viewers: 3,
-          total_likes: 1680,
-          total_gifts: 25,
-          total_chats: 155,
+          title: 'Live Stream',
+          total_viewers: 0,
+          total_likes: 0,
+          total_gifts: 0,
+          total_chats: 0,
           is_active: true
         }
       },
-      streamUserStats: {
-        [streamId]: {
-          'demo_user_1': {
-            stream_id: streamId,
-            user_id: 'demo_user_1',
-            first_join_at: Date.now() - 1800000,
-            last_seen_at: Date.now(),
-            watch_time_ms: 1800000,
-            likes: 350,
-            gifts: 10,
-            chats: 42,
-            shares: 2
-          },
-          'demo_user_2': {
-            stream_id: streamId,
-            user_id: 'demo_user_2',
-            first_join_at: Date.now() - 1500000,
-            last_seen_at: Date.now(),
-            watch_time_ms: 1500000,
-            likes: 210,
-            gifts: 5,
-            chats: 28,
-            shares: 1
-          },
-          'demo_user_3': {
-            stream_id: streamId,
-            user_id: 'demo_user_3',
-            first_join_at: Date.now() - 800000,
-            last_seen_at: Date.now(),
-            watch_time_ms: 800000,
-            likes: 90,
-            gifts: 1,
-            chats: 12,
-            shares: 0
-          }
-        }
-      },
+      streamUserStats: {},
       triggers: DEFAULT_PRESET_TRIGGERS,
       settings: {
         overlayAspect: '9:16',
@@ -328,6 +296,16 @@ class Database {
       if (fs.existsSync(DB_FILE)) {
         const raw = fs.readFileSync(DB_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
+        // By default, purge any seeded demo users so overlay only uses live channel data
+        if (!ENABLE_DUMMY_DATA && parsed.users) {
+          const purgedUsers: Record<string, TikTokUser> = {};
+          for (const [id, u] of Object.entries(parsed.users as Record<string, TikTokUser>)) {
+            if (!id.startsWith('demo_user_') && !id.startsWith('sim_')) {
+              purgedUsers[id] = u;
+            }
+          }
+          parsed.users = purgedUsers;
+        }
         // Ensure default triggers are populated if empty
         if (!parsed.triggers || parsed.triggers.length === 0) {
           parsed.triggers = DEFAULT_PRESET_TRIGGERS;

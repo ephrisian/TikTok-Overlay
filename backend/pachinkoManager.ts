@@ -9,6 +9,60 @@ export const PACHINKO_SLOTS: PachinkoSlot[] = [
 ];
 
 export class PachinkoManager {
+  private lastGlobalDropTime = 0;
+  private userDropTimes: Record<string, number> = {};
+  public readonly globalCooldownMs = 8000;  // 8s global debounce between drops
+  public readonly userCooldownMs = 30000;   // 30s per-user debounce
+
+  public canDrop(userId: string): { allowed: boolean; reason?: string; remainingMs?: number } {
+    const now = Date.now();
+    const globalElapsed = now - this.lastGlobalDropTime;
+    if (globalElapsed < this.globalCooldownMs) {
+      return { 
+        allowed: false, 
+        reason: 'global_cooldown', 
+        remainingMs: this.globalCooldownMs - globalElapsed 
+      };
+    }
+
+    const userLastDrop = this.userDropTimes[userId] || 0;
+    const userElapsed = now - userLastDrop;
+    if (userElapsed < this.userCooldownMs) {
+      return { 
+        allowed: false, 
+        reason: 'user_cooldown', 
+        remainingMs: this.userCooldownMs - userElapsed 
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  public triggerDropIfAllowed(
+    userId: string,
+    username: string,
+    pfpUrl: string,
+    forcedTier?: RarityTier,
+    sourceRule?: string
+  ): PachinkoDropEvent | null {
+    const check = this.canDrop(userId);
+    if (!check.allowed) {
+      const remainingSec = Math.ceil((check.remainingMs || 0) / 1000);
+      console.log(`[Pachinko] Suppressed drop for @${username} (${check.reason}: ${remainingSec}s remaining)${sourceRule ? ` from Rule "${sourceRule}"` : ''}`);
+      return null;
+    }
+
+    console.log(`[Pachinko] Triggered drop for @${username}${sourceRule ? ` from Rule "${sourceRule}"` : ''}`);
+    const drop = this.generateDrop(userId, username, pfpUrl, forcedTier);
+    
+    // Update cooldown timestamps
+    const now = Date.now();
+    this.lastGlobalDropTime = now;
+    this.userDropTimes[userId] = now;
+
+    return drop;
+  }
+
   // Generate a pachinko drop simulation with slot outcome
   public generateDrop(userId: string, username: string, pfpUrl: string, forcedTier?: RarityTier): PachinkoDropEvent {
     let chosenSlot: PachinkoSlot;

@@ -52,6 +52,18 @@ The unified backend and frontend will start at **`http://localhost:3000`**.
 - **Streamer Control Dashboard**: [`http://localhost:3000/`](http://localhost:3000/)
 - **OBS Browser Source Overlay**: [`http://localhost:3000/overlay`](http://localhost:3000/overlay)
 
+### 3. Production vs Development Data Modes
+
+- **Production Mode (Default - Live Data Only)**:
+  By default, `ENABLE_DUMMY_DATA` is disabled (`false`). The system boots with 0 sample viewers, 0 mock stats, and only reflects live viewers and events streaming in real-time from your connected TikTok channel.
+
+- **Development / Sandbox Testing Mode**:
+  If you want to pre-populate mock demo viewers (`@NeonStreamer`, `@CyberKitten`, `@PixelNinja`) for local offline design testing:
+  ```bash
+  # In your .env file or terminal:
+  ENABLE_DUMMY_DATA=true npm run dev
+  ```
+
 ---
 
 ## 🎥 Setting Up in OBS Studio

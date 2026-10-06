@@ -24,7 +24,7 @@ export default function App() {
 
   if (isOverlayRoute) {
     return (
-      <div className="w-screen h-screen overflow-hidden bg-transparent m-0 p-0">
+      <div className="w-screen h-screen overflow-hidden bg-transparent m-0 p-0 flex items-center justify-center">
         <FabricOverlay aspectRatio={aspect} isObsSource={true} />
       </div>
     );

@@ -247,6 +247,11 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
 
       case 'pachinko_drop': {
         const drop = msg.payload as PachinkoDropEvent;
+        // Limit on-screen pachinko balls to prevent flooding or collision loops
+        if (pachinkoBallsRef.current.length >= 2) {
+          console.warn('[Overlay] Pachinko ball ignored: maximum on-screen capacity reached (2)');
+          break;
+        }
         pachinkoBallsRef.current.push({
           id: 'pach_' + Math.random(),
           userId: drop.userId,
@@ -283,7 +288,7 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
       case 'event': {
         const evt = msg.payload as NormalizedStreamEvent;
         if (evt.type === 'chat') {
-          // Trigger speech bubble on buddy
+          // Display speech bubble on active buddy
           setBuddies(prev => {
             const current = prev[evt.userId];
             if (!current) return prev;
@@ -299,9 +304,8 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
           });
         } else if (evt.type === 'like_burst') {
           soundFX.playLikePop();
-          triggerBuddyReaction(evt.userId, 'grow');
         } else if (evt.type === 'join') {
-          // Add or ensure buddy
+          // Add or ensure buddy representation
           setBuddies(prev => {
             if (prev[evt.userId]) return prev;
             const newIndex = Object.keys(prev).length;
@@ -939,10 +943,10 @@ export const FabricOverlay: React.FC<FabricOverlayProps> = ({
   return (
     <div 
       ref={containerRef}
-      className={`relative select-none overflow-hidden ${isObsSource ? 'bg-transparent w-screen h-screen' : 'shadow-2xl rounded-xl border border-slate-700/60'}`}
+      className={`fabric-overlay-container relative select-none overflow-hidden ${isObsSource ? 'bg-transparent w-full h-full' : 'shadow-2xl rounded-xl border border-slate-700/60'}`}
       style={{
-        width: isObsSource ? '100vw' : `${width * scale}px`,
-        height: isObsSource ? '100vw' : `${height * scale}px`,
+        width: isObsSource ? '100%' : `${width * scale}px`,
+        height: isObsSource ? '100%' : `${height * scale}px`,
         maxWidth: isObsSource ? 'none' : '100%',
         aspectRatio: isPortrait ? '9/16' : '16/9'
       }}

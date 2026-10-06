@@ -15,14 +15,11 @@ import { streamStatsEngine } from './streamStatsEngine.ts';
 
 export class EventsRouter {
   private onBroadcastEvent: ((event: NormalizedStreamEvent) => void) | null = null;
-  private onTriggerPachinko: ((drop: any) => void) | null = null;
 
   public setCallbacks(
-    onBroadcastEvent: (event: NormalizedStreamEvent) => void,
-    onTriggerPachinko: (drop: any) => void
+    onBroadcastEvent: (event: NormalizedStreamEvent) => void
   ) {
     this.onBroadcastEvent = onBroadcastEvent;
-    this.onTriggerPachinko = onTriggerPachinko;
   }
 
   // Handle Join Event
@@ -75,15 +72,6 @@ export class EventsRouter {
       returningFromBreak,
       timeAwayMs
     };
-
-    // If pachinko is enabled or first-time viewer, trigger pachinko drop!
-    const settings = db.getSettings();
-    if (settings.pachinkoEnabled) {
-      const drop = pachinkoManager.generateDrop(user.id, user.username, user.pfp_url);
-      if (this.onTriggerPachinko) {
-        this.onTriggerPachinko(drop);
-      }
-    }
 
     this.processEvent(joinEvent, user);
     return joinEvent;

@@ -36,23 +36,22 @@ function broadcastWs(type: WsMessage['type'], payload: any) {
 }
 
 // Hook up event callbacks to broadcast over WebSocket
-eventsRouter.setCallbacks(
-  (event) => {
-    broadcastWs('event', event);
-    // Also push updated stream session info
-    broadcastWs('leaderboard_update', {
-      likes: db.getLeaderboard('likes'),
-      gifts: db.getLeaderboard('gifts'),
-      chat_messages: db.getLeaderboard('chat_messages')
-    });
-  },
-  (drop) => {
-    broadcastWs('pachinko_drop', drop);
-  }
-);
+eventsRouter.setCallbacks((event) => {
+  broadcastWs('event', event);
+  // Also push updated stream session info
+  broadcastWs('leaderboard_update', {
+    likes: db.getLeaderboard('likes'),
+    gifts: db.getLeaderboard('gifts'),
+    chat_messages: db.getLeaderboard('chat_messages')
+  });
+});
 
 ruleEngine.setCallback((action) => {
   broadcastWs('action', action);
+});
+
+ruleEngine.setPachinkoCallback((drop) => {
+  broadcastWs('pachinko_drop', drop);
 });
 
 bossManager.setCallbacks(

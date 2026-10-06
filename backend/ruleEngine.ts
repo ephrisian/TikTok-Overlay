@@ -3,19 +3,30 @@ import {
   TikTokUser, 
   IFTTTRule, 
   TriggerAction, 
-  SingleCondition 
+  SingleCondition,
+  PachinkoDropEvent 
 } from './types.ts';
 import { db } from './db.ts';
+import { pachinkoManager } from './pachinkoManager.ts';
 
 export class RuleEngine {
   private onActionGenerated: ((action: TriggerAction & { targetUser?: Partial<TikTokUser> }) => void) | null = null;
+  private onPachinkoDrop: ((drop: PachinkoDropEvent) => void) | null = null;
 
   public setCallback(callback: (action: TriggerAction & { targetUser?: Partial<TikTokUser> }) => void) {
     this.onActionGenerated = callback;
   }
 
+  public setPachinkoCallback(callback: (drop: PachinkoDropEvent) => void) {
+    this.onPachinkoDrop = callback;
+  }
+
   public evaluate(event: NormalizedStreamEvent, user: TikTokUser) {
     const rules = db.getTriggers().filter(r => r.enabled);
+    if (rules.length === 0) {
+      return;
+    }
+
     const context = {
       event,
       user,
@@ -23,32 +34,49 @@ export class RuleEngine {
     };
 
     for (const rule of rules) {
-      if (this.matchesCondition(rule.condition, context)) {
+      const matchResult = this.checkConditionWithExplanation(rule.condition, context);
+      if (matchResult.matched) {
+        console.log(`[RuleEngine] RULE MATCHED: "${rule.name}" (ID: ${rule.id}) on event: "${event.type}" from user: @${user.username || 'unknown'} | Reason: ${matchResult.reason} | Dispatched actions: [${rule.actions.map(a => a.type).join(', ')}]`);
         this.executeActions(rule, context);
       }
     }
   }
 
-  private matchesCondition(condition: IFTTTRule['condition'], context: any): boolean {
+  private checkConditionWithExplanation(
+    condition: IFTTTRule['condition'], 
+    context: any
+  ): { matched: boolean; reason: string } {
     if (condition.all && condition.all.length > 0) {
+      const reasons: string[] = [];
       for (const cond of condition.all) {
-        if (!this.evaluateSingle(cond, context)) {
-          return false;
+        const actual = this.resolveField(cond.field, context);
+        const pass = this.evaluateSingle(cond, context);
+        reasons.push(`${cond.field} (${actual}) ${cond.op} ${cond.value} => ${pass ? 'PASS' : 'FAIL'}`);
+        if (!pass) {
+          return { matched: false, reason: reasons.join('; ') };
         }
       }
-      return true;
+      return { matched: true, reason: `ALL criteria met: ${reasons.join('; ')}` };
     }
 
     if (condition.any && condition.any.length > 0) {
+      const reasons: string[] = [];
       for (const cond of condition.any) {
-        if (this.evaluateSingle(cond, context)) {
-          return true;
+        const actual = this.resolveField(cond.field, context);
+        const pass = this.evaluateSingle(cond, context);
+        reasons.push(`${cond.field} (${actual}) ${cond.op} ${cond.value} => ${pass ? 'PASS' : 'FAIL'}`);
+        if (pass) {
+          return { matched: true, reason: `ANY matched: ${cond.field} (${actual}) ${cond.op} ${cond.value}` };
         }
       }
-      return false;
+      return { matched: false, reason: `None matched: ${reasons.join('; ')}` };
     }
 
-    return false;
+    return { matched: false, reason: 'Empty condition set' };
+  }
+
+  private matchesCondition(condition: IFTTTRule['condition'], context: any): boolean {
+    return this.checkConditionWithExplanation(condition, context).matched;
   }
 
   private evaluateSingle(cond: SingleCondition, context: any): boolean {
@@ -69,7 +97,7 @@ export class RuleEngine {
       case 'less_or_equal':
         return Number(actualValue) <= Number(expectedValue);
       case 'contains':
-        return String(actualValue).toLowerCase().includes(String(expectedValue).toLowerCase());
+        return String(actualValue || '').toLowerCase().includes(String(expectedValue || '').toLowerCase());
       default:
         return false;
     }
@@ -87,6 +115,27 @@ export class RuleEngine {
 
   private executeActions(rule: IFTTTRule, context: any) {
     for (const action of rule.actions) {
+      console.log(`[RuleEngine] ACTION DISPATCHED: Type "${action.type}" via Rule "${rule.name}" for @${context.user?.username || 'user'}`);
+
+      // Handle Pachinko drop strictly through rule action with cooldown protection
+      if (action.type === 'trigger_pachinko') {
+        const settings = db.getSettings();
+        if (settings.pachinkoEnabled) {
+          const drop = pachinkoManager.triggerDropIfAllowed(
+            context.user.id,
+            context.user.username,
+            context.user.pfp_url,
+            action.pachinkoRarity,
+            rule.name
+          );
+          if (drop && this.onPachinkoDrop) {
+            this.onPachinkoDrop(drop);
+          }
+        } else {
+          console.log(`[RuleEngine] Pachinko drop skipped: Pachinko game is disabled in settings.`);
+        }
+      }
+
       // Interpolate text template strings in textOverrides
       const textOverrides: Record<string, string> = {};
       if (action.textOverrides) {
