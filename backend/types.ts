@@ -167,6 +167,38 @@ export interface TriggerAction {
   pachinkoRarity?: RarityTier;
 }
 
+// Settings & Supporter Types
+export type SupporterCriteria = 'diamonds' | 'likes' | 'chats' | 'support_score';
+export type SupporterTimeWindow = 'current_stream' | 'last_7_days' | 'last_30_days' | 'all_time';
+export type BuddyExitAnimation = 'fade' | 'slide_down' | 'shrink';
+
+export interface OverlaySettings {
+  overlayAspect: '9:16' | '16:9';
+  bossFightEnabled: boolean;
+  bossFightScheduleMinutes: number;
+  pachinkoEnabled: boolean;
+  maxBuddiesOnScreen: number;
+  streamerTiktokUsername: string;
+  tiktokSessionId?: string;
+  // Top Stream Supporters Box Config
+  showTopSupporters: boolean;
+  topSupportersCriteria: SupporterCriteria;
+  topSupportersTimeWindow: SupporterTimeWindow;
+  topSupportersMinThreshold: number;
+  topSupportersMaxDisplay: number;
+  // Buddy Lifecycle & Movement Config
+  buddyLifetimeSeconds: number;
+  buddyExitAnimation: BuddyExitAnimation;
+}
+
+export interface TopSupporterEntry {
+  username: string;
+  pfpUrl: string;
+  value: number;
+  tier: string;
+  metricLabel: string;
+}
+
 export interface IFTTTRule {
   id: string;
   name: string;

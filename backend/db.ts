@@ -6,7 +6,9 @@ import {
   StreamUserStats, 
   IFTTTRule, 
   RarityTier,
-  type BuddyType
+  type BuddyType,
+  OverlaySettings,
+  TopSupporterEntry
 } from './types.ts';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -18,15 +20,7 @@ export interface DatabaseSchema {
   streams: Record<string, StreamSession>;
   streamUserStats: Record<string, Record<string, StreamUserStats>>; // streamId -> userId -> stats
   triggers: IFTTTRule[];
-  settings: {
-    overlayAspect: '9:16' | '16:9';
-    bossFightEnabled: boolean;
-    bossFightScheduleMinutes: number;
-    pachinkoEnabled: boolean;
-    maxBuddiesOnScreen: number;
-    streamerTiktokUsername: string;
-    tiktokSessionId?: string;
-  };
+  settings: OverlaySettings;
 }
 
 const DEFAULT_PRESET_TRIGGERS: IFTTTRule[] = [
@@ -283,7 +277,14 @@ class Database {
         pachinkoEnabled: true,
         maxBuddiesOnScreen: 20,
         streamerTiktokUsername: 'babyboss.theshadow',
-        tiktokSessionId: ''
+        tiktokSessionId: '',
+        showTopSupporters: true,
+        topSupportersCriteria: 'diamonds',
+        topSupportersTimeWindow: 'current_stream',
+        topSupportersMinThreshold: 1,
+        topSupportersMaxDisplay: 5,
+        buddyLifetimeSeconds: 10,
+        buddyExitAnimation: 'fade'
       }
     };
   }
@@ -310,6 +311,9 @@ class Database {
         if (!parsed.triggers || parsed.triggers.length === 0) {
           parsed.triggers = DEFAULT_PRESET_TRIGGERS;
         }
+        // Ensure new settings fields have valid defaults
+        const defaultSettings = this.initDefaults().settings;
+        parsed.settings = { ...defaultSettings, ...(parsed.settings || {}) };
         return parsed;
       }
     } catch (err) {
@@ -567,6 +571,93 @@ class Database {
   // Settings
   getSettings() {
     return this.data.settings;
+  }
+
+  // Top Stream Supporters Calculation based on user-defined criteria & time window
+  getTopSupporters(): TopSupporterEntry[] {
+    const settings = this.data.settings;
+    if (!settings.showTopSupporters) {
+      return [];
+    }
+
+    const currentStreamId = this.data.currentStreamId;
+    const now = Date.now();
+    const windowMs = settings.topSupportersTimeWindow === 'current_stream'
+      ? 0
+      : settings.topSupportersTimeWindow === 'last_7_days'
+      ? 7 * 86400000
+      : settings.topSupportersTimeWindow === 'last_30_days'
+      ? 30 * 86400000
+      : Infinity;
+
+    const users = Object.values(this.data.users);
+    const qualifyingList: TopSupporterEntry[] = [];
+
+    for (const u of users) {
+      let metricValue = 0;
+      let label = '';
+
+      if (settings.topSupportersTimeWindow === 'current_stream') {
+        const streamStats = this.getUserStreamStats(currentStreamId, u.id);
+        if (!streamStats) continue;
+
+        switch (settings.topSupportersCriteria) {
+          case 'diamonds':
+            metricValue = streamStats.gifts;
+            label = '💎';
+            break;
+          case 'likes':
+            metricValue = streamStats.likes;
+            label = '❤️';
+            break;
+          case 'chats':
+            metricValue = streamStats.chats;
+            label = '💬';
+            break;
+          case 'support_score':
+            metricValue = Math.round(streamStats.gifts * 10 + streamStats.likes * 0.05 + streamStats.chats * 1);
+            label = '⭐ PTS';
+            break;
+        }
+      } else {
+        if (windowMs !== Infinity && (now - u.last_seen > windowMs)) {
+          continue;
+        }
+
+        switch (settings.topSupportersCriteria) {
+          case 'diamonds':
+            metricValue = u.total_gifts;
+            label = '💎';
+            break;
+          case 'likes':
+            metricValue = u.total_likes;
+            label = '❤️';
+            break;
+          case 'chats':
+            metricValue = u.total_chat_messages;
+            label = '💬';
+            break;
+          case 'support_score':
+            metricValue = Math.round(u.total_gifts * 10 + u.total_likes * 0.05 + u.total_chat_messages * 1);
+            label = '⭐ PTS';
+            break;
+        }
+      }
+
+      const minThreshold = settings.topSupportersMinThreshold ?? 1;
+      if (metricValue >= minThreshold) {
+        qualifyingList.push({
+          username: u.username,
+          pfpUrl: u.pfp_url,
+          value: metricValue,
+          tier: u.rarity_tier || 'common',
+          metricLabel: label
+        });
+      }
+    }
+
+    qualifyingList.sort((a, b) => b.value - a.value);
+    return qualifyingList.slice(0, settings.topSupportersMaxDisplay || 5);
   }
 
   updateSettings(settings: Partial<DatabaseSchema['settings']>) {

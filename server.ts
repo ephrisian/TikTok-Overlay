@@ -38,11 +38,12 @@ function broadcastWs(type: WsMessage['type'], payload: any) {
 // Hook up event callbacks to broadcast over WebSocket
 eventsRouter.setCallbacks((event) => {
   broadcastWs('event', event);
-  // Also push updated stream session info
+  // Also push updated stream session info and supporter standings
   broadcastWs('leaderboard_update', {
     likes: db.getLeaderboard('likes'),
     gifts: db.getLeaderboard('gifts'),
-    chat_messages: db.getLeaderboard('chat_messages')
+    chat_messages: db.getLeaderboard('chat_messages'),
+    topSupporters: db.getTopSupporters()
   });
 });
 
@@ -110,7 +111,8 @@ wss.on('connection', (ws: WebSocket) => {
       gifts: db.getLeaderboard('gifts'),
       chat_messages: db.getLeaderboard('chat_messages'),
       watch_time: db.getLeaderboard('watch_time'),
-      streams_attended: db.getLeaderboard('streams_attended')
+      streams_attended: db.getLeaderboard('streams_attended'),
+      topSupporters: db.getTopSupporters()
     }
   };
 
@@ -145,7 +147,8 @@ app.get('/api/state', (req, res) => {
     leaderboards: {
       likes: db.getLeaderboard('likes'),
       gifts: db.getLeaderboard('gifts'),
-      chat_messages: db.getLeaderboard('chat_messages')
+      chat_messages: db.getLeaderboard('chat_messages'),
+      topSupporters: db.getTopSupporters()
     }
   });
 });
@@ -367,7 +370,16 @@ app.post('/api/users/:id/buddy', (req, res) => {
 // Settings & Stream Session
 app.post('/api/settings', (req, res) => {
   db.updateSettings(req.body);
-  res.json({ success: true, settings: db.getSettings() });
+  const updatedSettings = db.getSettings();
+  const updatedSupporters = db.getTopSupporters();
+  broadcastWs('leaderboard_update', {
+    likes: db.getLeaderboard('likes'),
+    gifts: db.getLeaderboard('gifts'),
+    chat_messages: db.getLeaderboard('chat_messages'),
+    topSupporters: updatedSupporters,
+    settings: updatedSettings
+  });
+  res.json({ success: true, settings: updatedSettings, topSupporters: updatedSupporters });
 });
 
 app.post('/api/stream/new', (req, res) => {
