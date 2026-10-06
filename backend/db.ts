@@ -11,7 +11,9 @@ import {
   SupportBucket,
   SupportersPayload,
   SupporterEntry,
-  type BuddyType
+  type BuddyType,
+  OverlaySettings,
+  TopSupporterEntry
 } from './types.ts';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -29,33 +31,10 @@ export interface DatabaseSchema {
     bossFightScheduleMinutes: number;
     pachinkoEnabled: boolean;
     maxBuddiesOnScreen: number;
-    showChat: boolean;
     streamerTiktokUsername: string;
     tiktokSessionId?: string;
-    buddies: BuddySettings;
-    topSupporters: TopSupportersConfig;
   };
-  supportLedger: SupportBucket[];
 }
-
-export const DEFAULT_BUDDY_SETTINGS: BuddySettings = {
-  defaultLifetimeMs: 10000,
-  defaultExitAnimation: 'fade',
-  overflowBehavior: 'queue',
-  maxQueue: 8
-};
-
-export const DEFAULT_TOP_SUPPORTERS: TopSupportersConfig = {
-  enabled: true,
-  criteria: 'tips',
-  window: 'last_stream',
-  minValue: 1,
-  maxEntries: 4,
-  weights: { tip: 1, sub: 500, bit: 0.01, chat: 0.5 }
-};
-
-const HOUR_MS = 3600000;
-const LEDGER_RETENTION_MS = 400 * 24 * HOUR_MS;
 
 const DEFAULT_PRESET_TRIGGERS: IFTTTRule[] = [
   {
@@ -312,11 +291,8 @@ class Database {
         maxBuddiesOnScreen: 8,
         showChat: false,
         streamerTiktokUsername: 'babyboss.theshadow',
-        tiktokSessionId: '',
-        buddies: { ...DEFAULT_BUDDY_SETTINGS },
-        topSupporters: { ...DEFAULT_TOP_SUPPORTERS, weights: { ...DEFAULT_TOP_SUPPORTERS.weights } }
-      },
-      supportLedger: []
+        tiktokSessionId: ''
+      }
     };
   }
 
@@ -342,18 +318,6 @@ class Database {
         if (!parsed.triggers || parsed.triggers.length === 0) {
           parsed.triggers = DEFAULT_PRESET_TRIGGERS;
         }
-        // Migrate older db.json files that predate buddy / supporter settings
-        parsed.settings = {
-          showChat: false,
-          ...parsed.settings,
-          buddies: { ...DEFAULT_BUDDY_SETTINGS, ...(parsed.settings?.buddies || {}) },
-          topSupporters: {
-            ...DEFAULT_TOP_SUPPORTERS,
-            ...(parsed.settings?.topSupporters || {}),
-            weights: { ...DEFAULT_TOP_SUPPORTERS.weights, ...(parsed.settings?.topSupporters?.weights || {}) }
-          }
-        };
-        if (!Array.isArray(parsed.supportLedger)) parsed.supportLedger = [];
         return parsed;
       }
     } catch (err) {
@@ -611,6 +575,93 @@ class Database {
   // Settings
   getSettings() {
     return this.data.settings;
+  }
+
+  // Top Stream Supporters Calculation based on user-defined criteria & time window
+  getTopSupporters(): TopSupporterEntry[] {
+    const settings = this.data.settings;
+    if (!settings.showTopSupporters) {
+      return [];
+    }
+
+    const currentStreamId = this.data.currentStreamId;
+    const now = Date.now();
+    const windowMs = settings.topSupportersTimeWindow === 'current_stream'
+      ? 0
+      : settings.topSupportersTimeWindow === 'last_7_days'
+      ? 7 * 86400000
+      : settings.topSupportersTimeWindow === 'last_30_days'
+      ? 30 * 86400000
+      : Infinity;
+
+    const users = Object.values(this.data.users);
+    const qualifyingList: TopSupporterEntry[] = [];
+
+    for (const u of users) {
+      let metricValue = 0;
+      let label = '';
+
+      if (settings.topSupportersTimeWindow === 'current_stream') {
+        const streamStats = this.getUserStreamStats(currentStreamId, u.id);
+        if (!streamStats) continue;
+
+        switch (settings.topSupportersCriteria) {
+          case 'diamonds':
+            metricValue = streamStats.gifts;
+            label = '💎';
+            break;
+          case 'likes':
+            metricValue = streamStats.likes;
+            label = '❤️';
+            break;
+          case 'chats':
+            metricValue = streamStats.chats;
+            label = '💬';
+            break;
+          case 'support_score':
+            metricValue = Math.round(streamStats.gifts * 10 + streamStats.likes * 0.05 + streamStats.chats * 1);
+            label = '⭐ PTS';
+            break;
+        }
+      } else {
+        if (windowMs !== Infinity && (now - u.last_seen > windowMs)) {
+          continue;
+        }
+
+        switch (settings.topSupportersCriteria) {
+          case 'diamonds':
+            metricValue = u.total_gifts;
+            label = '💎';
+            break;
+          case 'likes':
+            metricValue = u.total_likes;
+            label = '❤️';
+            break;
+          case 'chats':
+            metricValue = u.total_chat_messages;
+            label = '💬';
+            break;
+          case 'support_score':
+            metricValue = Math.round(u.total_gifts * 10 + u.total_likes * 0.05 + u.total_chat_messages * 1);
+            label = '⭐ PTS';
+            break;
+        }
+      }
+
+      const minThreshold = settings.topSupportersMinThreshold ?? 1;
+      if (metricValue >= minThreshold) {
+        qualifyingList.push({
+          username: u.username,
+          pfpUrl: u.pfp_url,
+          value: metricValue,
+          tier: u.rarity_tier || 'common',
+          metricLabel: label
+        });
+      }
+    }
+
+    qualifyingList.sort((a, b) => b.value - a.value);
+    return qualifyingList.slice(0, settings.topSupportersMaxDisplay || 5);
   }
 
   updateSettings(settings: Partial<DatabaseSchema['settings']>) {
