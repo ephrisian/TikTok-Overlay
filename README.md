@@ -25,7 +25,7 @@ Built for **OBS Studio**, **Streamlabs Desktop**, and **TikTok LIVE Studio**.
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) v18.0.0 or higher
+- [Node.js](https://nodejs.org/) v20.19.0 or higher, or v22.12.0 or higher (required by Vite 8)
 - npm (bundled with Node.js)
 - [OBS Studio](https://obsproject.com/) (or Streamlabs / TikTok LIVE Studio)
 
@@ -51,6 +51,10 @@ The unified backend and frontend will start at **`http://localhost:3000`**.
 
 - **Streamer Control Dashboard**: [`http://localhost:3000/`](http://localhost:3000/)
 - **OBS Browser Source Overlay**: [`http://localhost:3000/overlay`](http://localhost:3000/overlay)
+
+## Construct Event-Sheet Integration
+
+The optional Construct 2 and Construct 3 listener add-ons connect event sheets to this server's TikTok live events. See the [Construct plugin setup and event reference](./construct-plugins/README.md).
 
 ### 3. Production vs Development Data Modes
 

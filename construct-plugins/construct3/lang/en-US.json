@@ -1,0 +1,56 @@
+{
+  "languageTag": "en-US",
+  "fileDescription": "Strings for TikTok Live Listener.",
+  "text": {
+    "plugins": {
+      "ephrisian_tiktoklivelistener": {
+        "name": "TikTok Live Listener",
+        "description": "Connect to the TikTok Overlay server and receive TikTok live events.",
+        "help-url": "https://github.com/ephrisian/TikTok-Overlay",
+        "aceCategories": {
+          "custom": "TikTok"
+        },
+        "conditions": {
+          "on-join": { "list-name": "On join", "display-text": "On viewer join", "description": "Triggered when a viewer joins." },
+          "on-chat": { "list-name": "On chat", "display-text": "On chat message", "description": "Triggered when a viewer sends a chat message." },
+          "on-like-burst": { "list-name": "On like burst", "display-text": "On like burst", "description": "Triggered when a viewer sends likes." },
+          "on-gift": { "list-name": "On gift", "display-text": "On gift", "description": "Triggered when a viewer sends a gift." },
+          "on-share": { "list-name": "On share", "display-text": "On share", "description": "Triggered when a viewer shares the stream." },
+          "on-follow": { "list-name": "On follow", "display-text": "On follow", "description": "Triggered when a viewer follows the channel." },
+          "on-connected": { "list-name": "On connected", "display-text": "On connected", "description": "Triggered when the listener connects to a live channel." },
+          "on-disconnected": { "list-name": "On disconnected", "display-text": "On disconnected", "description": "Triggered when the listener disconnects." },
+          "on-offline": { "list-name": "On offline", "display-text": "On offline", "description": "Triggered when the channel is not live or its stream ends." },
+          "on-error": { "list-name": "On error", "display-text": "On error", "description": "Triggered when the listener encounters an error." },
+          "on-connecting": { "list-name": "On connecting", "display-text": "On connecting", "description": "Triggered when the listener begins connecting." },
+          "on-viewer-count-changed": { "list-name": "On viewer count changed", "display-text": "On viewer count changed", "description": "Triggered when the live viewer count changes." }
+        },
+        "actions": {
+          "connect": { "list-name": "Connect", "display-text": "Connect to channel {0}", "description": "Connect to a TikTok live channel.", "params": { "channel": { "name": "Channel", "desc": "TikTok username; @ is optional." }, "session-id": { "name": "Session ID or cookie", "desc": "Optional TikTok session ID or cookie." } } },
+          "authenticate-session": { "list-name": "Authenticate session", "display-text": "Authenticate with session {0}", "description": "Save a TikTok session ID or cookie on the local overlay server.", "params": { "session-id": { "name": "Session ID or cookie", "desc": "TikTok session ID or full cookie string." } } },
+          "disconnect": { "list-name": "Disconnect", "display-text": "Disconnect from TikTok", "description": "Disconnect the listener and stop reconnecting." },
+          "set-server-url": { "list-name": "Set server URL", "display-text": "Set server URL to {0}", "description": "Set the URL of the TikTok Overlay server.", "params": { "server-url": { "name": "Server URL", "desc": "Base URL, for example http://localhost:3000." } } }
+        },
+        "expressions": {
+          "channel": { "translated-name": "Channel", "description": "Connected TikTok channel username." },
+          "status": { "translated-name": "Status", "description": "Current connection status." },
+          "error-message": { "translated-name": "ErrorMessage", "description": "Latest connection error." },
+          "user-id": { "translated-name": "UserID", "description": "User ID from the latest event." },
+          "username": { "translated-name": "Username", "description": "Username from the latest event." },
+          "profile-picture-url": { "translated-name": "ProfilePictureURL", "description": "Profile picture URL from the latest event." },
+          "message": { "translated-name": "Message", "description": "Chat message from the latest chat event." },
+          "like-count": { "translated-name": "LikeCount", "description": "Count from the latest like burst." },
+          "total-likes-this-stream": { "translated-name": "TotalLikesThisStream", "description": "Stream like total from the latest like burst." },
+          "gift-id": { "translated-name": "GiftID", "description": "Gift ID from the latest gift event." },
+          "gift-name": { "translated-name": "GiftName", "description": "Gift name from the latest gift event." },
+          "diamond-count": { "translated-name": "DiamondCount", "description": "Diamond value of the latest gift." },
+          "gift-repeat-count": { "translated-name": "GiftRepeatCount", "description": "Repeat count of the latest gift." },
+          "event-timestamp": { "translated-name": "EventTimestamp", "description": "Latest event timestamp in milliseconds." },
+          "viewer-count": { "translated-name": "ViewerCount", "description": "Latest live viewer count reported by TikTok." },
+          "stream-id": { "translated-name": "StreamID", "description": "Stream ID from the latest event." },
+          "last-event-json": { "translated-name": "LastEventJSON", "description": "Complete latest normalized event as JSON." },
+          "event-field": { "translated-name": "EventField", "description": "Read a field from the latest event.", "params": { "field-name": { "name": "Field name", "desc": "Name of the normalized event field." } } }
+        }
+      }
+    }
+  }
+}

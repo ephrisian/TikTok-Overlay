@@ -1,0 +1,70 @@
+{
+  "custom": {
+    "conditions": [
+      { "id": "on-join", "scriptName": "OnJoin", "isTrigger": true },
+      { "id": "on-chat", "scriptName": "OnChat", "isTrigger": true },
+      { "id": "on-like-burst", "scriptName": "OnLikeBurst", "isTrigger": true },
+      { "id": "on-gift", "scriptName": "OnGift", "isTrigger": true },
+      { "id": "on-share", "scriptName": "OnShare", "isTrigger": true },
+      { "id": "on-follow", "scriptName": "OnFollow", "isTrigger": true },
+      { "id": "on-connected", "scriptName": "OnConnected", "isTrigger": true },
+      { "id": "on-disconnected", "scriptName": "OnDisconnected", "isTrigger": true },
+      { "id": "on-offline", "scriptName": "OnOffline", "isTrigger": true },
+      { "id": "on-error", "scriptName": "OnError", "isTrigger": true },
+      { "id": "on-connecting", "scriptName": "OnConnecting", "isTrigger": true },
+      { "id": "on-viewer-count-changed", "scriptName": "OnViewerCountChanged", "isTrigger": true }
+    ],
+    "actions": [
+      {
+        "id": "connect",
+        "scriptName": "Connect",
+        "params": [
+          { "id": "channel", "type": "string" },
+          { "id": "session-id", "type": "string" }
+        ]
+      },
+      {
+        "id": "authenticate-session",
+        "scriptName": "AuthenticateSession",
+        "params": [
+          { "id": "session-id", "type": "string" }
+        ]
+      },
+      { "id": "disconnect", "scriptName": "Disconnect" },
+      {
+        "id": "set-server-url",
+        "scriptName": "SetServerURL",
+        "params": [
+          { "id": "server-url", "type": "string" }
+        ]
+      }
+    ],
+    "expressions": [
+      { "id": "channel", "expressionName": "Channel", "returnType": "string" },
+      { "id": "status", "expressionName": "Status", "returnType": "string" },
+      { "id": "error-message", "expressionName": "ErrorMessage", "returnType": "string" },
+      { "id": "user-id", "expressionName": "UserID", "returnType": "string" },
+      { "id": "username", "expressionName": "Username", "returnType": "string" },
+      { "id": "profile-picture-url", "expressionName": "ProfilePictureURL", "returnType": "string" },
+      { "id": "message", "expressionName": "Message", "returnType": "string" },
+      { "id": "like-count", "expressionName": "LikeCount", "returnType": "number" },
+      { "id": "total-likes-this-stream", "expressionName": "TotalLikesThisStream", "returnType": "number" },
+      { "id": "gift-id", "expressionName": "GiftID", "returnType": "string" },
+      { "id": "gift-name", "expressionName": "GiftName", "returnType": "string" },
+      { "id": "diamond-count", "expressionName": "DiamondCount", "returnType": "number" },
+      { "id": "gift-repeat-count", "expressionName": "GiftRepeatCount", "returnType": "number" },
+      { "id": "event-timestamp", "expressionName": "EventTimestamp", "returnType": "number" },
+      { "id": "stream-id", "expressionName": "StreamID", "returnType": "string" },
+      { "id": "last-event-json", "expressionName": "LastEventJSON", "returnType": "string" },
+      { "id": "viewer-count", "expressionName": "ViewerCount", "returnType": "number" },
+      {
+        "id": "event-field",
+        "expressionName": "EventField",
+        "returnType": "string",
+        "params": [
+          { "id": "field-name", "type": "string" }
+        ]
+      }
+    ]
+  }
+}

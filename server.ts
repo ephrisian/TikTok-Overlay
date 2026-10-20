@@ -15,6 +15,33 @@ const PORT = 3000;
 const app = express();
 app.use(express.json());
 
+const constructPluginAllowedOrigins = new Set(
+  (process.env.CONSTRUCT_PLUGIN_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+);
+
+app.use('/api/connector', (req, res, next) => {
+  const origin = req.get('Origin');
+  const isLocalConstructOrigin = origin
+    ? /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(origin)
+    : false;
+
+  if (origin && (isLocalConstructOrigin || constructPluginAllowedOrigins.has(origin))) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Max-Age', '600');
+  }
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 const httpServer = createServer(app);
 
 // WebSocket Server

@@ -65,7 +65,9 @@ export class TikTokClientManager {
   }
 
   public getState(): ConnectorState {
-    return this.state;
+    const publicState = { ...this.state };
+    delete publicState.sessionId;
+    return publicState;
   }
 
   public async connect(rawUsername: string, options?: { sessionId?: string }) {
@@ -423,7 +425,7 @@ export class TikTokClientManager {
 
   private notify() {
     if (this.onStateChange) {
-      this.onStateChange(this.state);
+      this.onStateChange(this.getState());
     }
   }
 }
