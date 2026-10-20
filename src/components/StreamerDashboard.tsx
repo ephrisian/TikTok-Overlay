@@ -31,7 +31,8 @@ import {
   CheckCircle2,
   LogIn,
   LogOut,
-  Search
+  Search,
+  Activity
 } from 'lucide-react';
 import { FabricOverlay } from '../overlay/FabricOverlay.tsx';
 import { ChatMonitor } from './ChatMonitor.tsx';
@@ -50,6 +51,7 @@ import { soundFX } from '../audio/soundFX.ts';
 export const StreamerDashboard: React.FC = () => {
   const [aspect, setAspect] = useState<AspectRatio>('9:16');
   const [showGuides, setShowGuides] = useState(false);
+  const [showDevHud, setShowDevHud] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [activeTab, setActiveTab] = useState<'simulator' | 'boss' | 'crm' | 'rules' | 'stats' | 'settings'>('simulator');
   const [copiedLink, setCopiedLink] = useState(false);
@@ -596,6 +598,20 @@ export const StreamerDashboard: React.FC = () => {
             <Grid3X3 className="w-4 h-4" />
           </button>
 
+          {/* Dev/FPS Debug HUD Toggle */}
+          <button
+            onClick={() => setShowDevHud(!showDevHud)}
+            title="Toggle Dev/FPS Performance HUD (or press 'D' on keyboard)"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-bold transition ${
+              showDevHud
+                ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-sm shadow-emerald-500/20'
+                : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+            }`}
+          >
+            <Activity className="w-4 h-4 text-emerald-400" />
+            <span className="hidden sm:inline">FPS / Dev HUD</span>
+          </button>
+
           {/* Copy Localhost OBS Source URL */}
           <button
             onClick={() => copyObsLink(true)}
@@ -641,6 +657,7 @@ export const StreamerDashboard: React.FC = () => {
                   aspectRatio={aspect}
                   scale={aspect === '9:16' ? 0.35 : 0.44}
                   showGuides={showGuides}
+                  showDevHud={showDevHud}
                 />
               </div>
             )}

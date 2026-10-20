@@ -251,12 +251,16 @@ app.post('/api/simulate', (req, res) => {
     case 'gift':
       result = tiktokClient.simulateGift(giftName || 'Galaxy 🌌', count || 1, username);
       break;
-    case 'pachinko':
-      const user = db.getAllUsers()[0] || db.upsertUser({ id: 'sim_test', username: 'TestVoyager' });
+    case 'pachinko': {
+      const dropUsername = username || 'TestVoyager';
+      const user = db.getAllUsers().find(u => u.username === dropUsername) || db.upsertUser({ id: 'sim_' + Date.now(), username: dropUsername });
       const drop = pachinkoManager.generateDrop(user.id, user.username, user.pfp_url);
+      if (typeof req.body.initialXRatio === 'number') drop.initialXRatio = req.body.initialXRatio;
+      if (typeof req.body.initialVx === 'number') drop.initialVx = req.body.initialVx;
       broadcastWs('pachinko_drop', drop);
       result = drop;
       break;
+    }
     case 'toggle_auto':
       const active = tiktokClient.toggleAutoSimulator();
       return res.json({ success: true, autoActive: active });
@@ -374,7 +378,10 @@ app.post('/api/users/:id/buddy', (req, res) => {
 // Settings & Stream Session
 app.post('/api/settings', (req, res) => {
   db.updateSettings(req.body);
-  res.json({ success: true, settings: db.getSettings() });
+  const updated = db.getSettings();
+  broadcastWs('settings_update', updated);
+  broadcastWs('supporters_update', db.getTopSupporters());
+  res.json({ success: true, settings: updated });
 });
 
 app.post('/api/stream/new', (req, res) => {

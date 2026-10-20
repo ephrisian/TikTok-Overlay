@@ -11,8 +11,8 @@ export const PACHINKO_SLOTS: PachinkoSlot[] = [
 export class PachinkoManager {
   private lastGlobalDropTime = 0;
   private userDropTimes: Record<string, number> = {};
-  public readonly globalCooldownMs = 8000;  // 8s global debounce between drops
-  public readonly userCooldownMs = 30000;   // 30s per-user debounce
+  public readonly globalCooldownMs = 300;   // 300ms debounce to prevent same-tick duplicates while allowing rapid consecutive drops
+  public readonly userCooldownMs = 1500;   // 1.5s per-user debounce
 
   public canDrop(userId: string): { allowed: boolean; reason?: string; remainingMs?: number } {
     const now = Date.now();
@@ -63,53 +63,23 @@ export class PachinkoManager {
     return drop;
   }
 
-  // Generate a pachinko drop simulation with slot outcome
+  // Generate a pachinko drop simulation with initial physical launch parameters
   public generateDrop(userId: string, username: string, pfpUrl: string, forcedTier?: RarityTier): PachinkoDropEvent {
-    let chosenSlot: PachinkoSlot;
+    // Initial drop entry point within top hopper
+    const initialXRatio = 0.5 + (Math.random() - 0.5) * 0.14;
+    // Initial release impulse
+    const initialVx = (Math.random() - 0.5) * 1.2;
 
-    if (forcedTier) {
-      chosenSlot = PACHINKO_SLOTS.find(s => s.tier === forcedTier) || PACHINKO_SLOTS[0];
-    } else {
-      const rand = Math.random();
-      let accum = 0;
-      chosenSlot = PACHINKO_SLOTS[0];
-      for (const slot of PACHINKO_SLOTS) {
-        accum += slot.probability;
-        if (rand <= accum) {
-          chosenSlot = slot;
-          break;
-        }
-      }
-    }
-
-    // Generate bounce path coordinates for 5 peg rows
-    // normalized between 0.15 and 0.85 of width
-    const rows = 6;
-    const dropPathX: number[] = [];
-    let curX = 0.5 + (Math.random() - 0.5) * 0.15; // start near top center
-    dropPathX.push(curX);
-
-    for (let r = 0; r < rows; r++) {
-      const deflection = (Math.random() - 0.5) * 0.18;
-      curX = Math.max(0.12, Math.min(0.88, curX + deflection));
-      dropPathX.push(curX);
-    }
-
-    // Final target slot position based on index (0, 1, 2, 3)
-    const slotXPositions = [0.22, 0.41, 0.59, 0.78];
-    dropPathX.push(slotXPositions[chosenSlot.index]);
-
-    // Update user in DB with their won rarity tier and glow color
-    db.updateUserRarity(userId, chosenSlot.tier, chosenSlot.color);
-
+    const defaultSlot = PACHINKO_SLOTS[0];
     return {
       userId,
       username,
       pfpUrl,
-      slotIndex: chosenSlot.index,
-      tier: chosenSlot.tier,
-      glowColor: chosenSlot.color,
-      dropPathX
+      initialXRatio,
+      initialVx,
+      tier: forcedTier || defaultSlot.tier,
+      glowColor: defaultSlot.color,
+      slotIndex: defaultSlot.index
     };
   }
 }

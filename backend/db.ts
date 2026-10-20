@@ -12,28 +12,22 @@ import {
   SupportersPayload,
   SupporterEntry,
   type BuddyType,
-  OverlaySettings,
-  TopSupporterEntry
+  OverlaySettings
 } from './types.ts';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
+const HOUR_MS = 60 * 60 * 1000;
+const LEDGER_RETENTION_MS = 35 * 24 * HOUR_MS;
 
 export interface DatabaseSchema {
   users: Record<string, TikTokUser>;
   currentStreamId: string;
   streams: Record<string, StreamSession>;
   streamUserStats: Record<string, Record<string, StreamUserStats>>; // streamId -> userId -> stats
+  supportLedger: SupportBucket[];
   triggers: IFTTTRule[];
-  settings: {
-    overlayAspect: '9:16' | '16:9';
-    bossFightEnabled: boolean;
-    bossFightScheduleMinutes: number;
-    pachinkoEnabled: boolean;
-    maxBuddiesOnScreen: number;
-    streamerTiktokUsername: string;
-    tiktokSessionId?: string;
-  };
+  settings: OverlaySettings;
 }
 
 const DEFAULT_PRESET_TRIGGERS: IFTTTRule[] = [
@@ -282,16 +276,40 @@ class Database {
         }
       },
       streamUserStats: {},
+      supportLedger: [],
       triggers: DEFAULT_PRESET_TRIGGERS,
       settings: {
         overlayAspect: '9:16',
         bossFightEnabled: true,
         bossFightScheduleMinutes: 15,
         pachinkoEnabled: true,
+        pachinkoPhysics: {
+          gravity: 0.38,
+          bounciness: 0.65,
+          friction: 0.985,
+          ballRadius: 18,
+          stayDurationSeconds: 8,
+          pegJitter: 0.15,
+          fallSpeedCap: 15
+        },
         maxBuddiesOnScreen: 8,
         showChat: false,
         streamerTiktokUsername: 'babyboss.theshadow',
-        tiktokSessionId: ''
+        tiktokSessionId: '',
+        buddies: {
+          defaultLifetimeMs: 10000,
+          defaultExitAnimation: 'fade',
+          overflowBehavior: 'queue',
+          maxQueue: 8
+        },
+        topSupporters: {
+          enabled: true,
+          criteria: 'tips',
+          window: 'last_stream',
+          minValue: 1,
+          maxEntries: 5,
+          weights: { tip: 10, sub: 50, bit: 0.05, chat: 1 }
+        }
       }
     };
   }
@@ -318,6 +336,21 @@ class Database {
         if (!parsed.triggers || parsed.triggers.length === 0) {
           parsed.triggers = DEFAULT_PRESET_TRIGGERS;
         }
+        if (!parsed.supportLedger) {
+          parsed.supportLedger = [];
+        }
+        const defaultSettings = this.initDefaults().settings;
+        parsed.settings = {
+          ...defaultSettings,
+          ...(parsed.settings || {}),
+          pachinkoPhysics: { ...defaultSettings.pachinkoPhysics, ...(parsed.settings?.pachinkoPhysics || {}) },
+          buddies: { ...defaultSettings.buddies, ...(parsed.settings?.buddies || {}) },
+          topSupporters: {
+            ...defaultSettings.topSupporters,
+            ...(parsed.settings?.topSupporters || {}),
+            weights: { ...defaultSettings.topSupporters.weights, ...(parsed.settings?.topSupporters?.weights || {}) }
+          }
+        };
         return parsed;
       }
     } catch (err) {
@@ -577,103 +610,26 @@ class Database {
     return this.data.settings;
   }
 
-  // Top Stream Supporters Calculation based on user-defined criteria & time window
-  getTopSupporters(): TopSupporterEntry[] {
-    const settings = this.data.settings;
-    if (!settings.showTopSupporters) {
-      return [];
-    }
-
-    const currentStreamId = this.data.currentStreamId;
-    const now = Date.now();
-    const windowMs = settings.topSupportersTimeWindow === 'current_stream'
-      ? 0
-      : settings.topSupportersTimeWindow === 'last_7_days'
-      ? 7 * 86400000
-      : settings.topSupportersTimeWindow === 'last_30_days'
-      ? 30 * 86400000
-      : Infinity;
-
-    const users = Object.values(this.data.users);
-    const qualifyingList: TopSupporterEntry[] = [];
-
-    for (const u of users) {
-      let metricValue = 0;
-      let label = '';
-
-      if (settings.topSupportersTimeWindow === 'current_stream') {
-        const streamStats = this.getUserStreamStats(currentStreamId, u.id);
-        if (!streamStats) continue;
-
-        switch (settings.topSupportersCriteria) {
-          case 'diamonds':
-            metricValue = streamStats.gifts;
-            label = '💎';
-            break;
-          case 'likes':
-            metricValue = streamStats.likes;
-            label = '❤️';
-            break;
-          case 'chats':
-            metricValue = streamStats.chats;
-            label = '💬';
-            break;
-          case 'support_score':
-            metricValue = Math.round(streamStats.gifts * 10 + streamStats.likes * 0.05 + streamStats.chats * 1);
-            label = '⭐ PTS';
-            break;
-        }
-      } else {
-        if (windowMs !== Infinity && (now - u.last_seen > windowMs)) {
-          continue;
-        }
-
-        switch (settings.topSupportersCriteria) {
-          case 'diamonds':
-            metricValue = u.total_gifts;
-            label = '💎';
-            break;
-          case 'likes':
-            metricValue = u.total_likes;
-            label = '❤️';
-            break;
-          case 'chats':
-            metricValue = u.total_chat_messages;
-            label = '💬';
-            break;
-          case 'support_score':
-            metricValue = Math.round(u.total_gifts * 10 + u.total_likes * 0.05 + u.total_chat_messages * 1);
-            label = '⭐ PTS';
-            break;
-        }
-      }
-
-      const minThreshold = settings.topSupportersMinThreshold ?? 1;
-      if (metricValue >= minThreshold) {
-        qualifyingList.push({
-          username: u.username,
-          pfpUrl: u.pfp_url,
-          value: metricValue,
-          tier: u.rarity_tier || 'common',
-          metricLabel: label
-        });
-      }
-    }
-
-    qualifyingList.sort((a, b) => b.value - a.value);
-    return qualifyingList.slice(0, settings.topSupportersMaxDisplay || 5);
-  }
-
   updateSettings(settings: Partial<DatabaseSchema['settings']>) {
     const cur = this.data.settings;
     this.data.settings = {
       ...cur,
       ...settings,
+      pachinkoPhysics: {
+        ...(cur.pachinkoPhysics || {
+          gravity: 0.35,
+          bounciness: 0.65,
+          friction: 0.985,
+          ballRadius: 20,
+          stayDurationSeconds: 10
+        }),
+        ...(settings.pachinkoPhysics || {})
+      },
       buddies: { ...cur.buddies, ...(settings.buddies || {}) },
       topSupporters: {
         ...cur.topSupporters,
         ...(settings.topSupporters || {}),
-        weights: { ...cur.topSupporters.weights, ...(settings.topSupporters?.weights || {}) }
+        weights: { ...cur.topSupporters?.weights, ...(settings.topSupporters?.weights || {}) }
       }
     };
     this.save();
@@ -689,14 +645,14 @@ class Database {
     const ledger = this.data.supportLedger;
     let bucket = ledger.length ? ledger[ledger.length - 1] : undefined;
     if (!bucket || bucket.hour !== hour || bucket.streamId !== streamId || bucket.userId !== userId) {
-      bucket = ledger.find(b => b.hour === hour && b.streamId === streamId && b.userId === userId);
+      bucket = ledger.find((b: SupportBucket) => b.hour === hour && b.streamId === streamId && b.userId === userId);
     }
     if (!bucket) {
       bucket = { hour, streamId, userId, tips: 0, subs: 0, bits: 0, chats: 0 };
       ledger.push(bucket);
       const cutoff = Date.now() - LEDGER_RETENTION_MS;
       if (ledger.length > 5000 && ledger[0].hour < cutoff) {
-        this.data.supportLedger = ledger.filter(b => b.hour >= cutoff);
+        this.data.supportLedger = ledger.filter((b: SupportBucket) => b.hour >= cutoff);
       }
     }
     bucket.tips += delta.tips || 0;

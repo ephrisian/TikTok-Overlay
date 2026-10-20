@@ -22,8 +22,14 @@ class SoundFXEngine {
     this.isMuted = muted;
   }
 
+  private lastBounceTime = 0;
+
   // Pachinko Peg deflection bounce (crisp metallic click)
   public playPegBounce() {
+    const now = performance.now();
+    if (now - this.lastBounceTime < 45) return;
+    this.lastBounceTime = now;
+
     const ctx = this.getContext();
     if (!ctx) return;
 
