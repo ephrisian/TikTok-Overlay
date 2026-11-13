@@ -12,7 +12,8 @@
       { "id": "on-offline", "scriptName": "OnOffline", "isTrigger": true },
       { "id": "on-error", "scriptName": "OnError", "isTrigger": true },
       { "id": "on-connecting", "scriptName": "OnConnecting", "isTrigger": true },
-      { "id": "on-viewer-count-changed", "scriptName": "OnViewerCountChanged", "isTrigger": true }
+      { "id": "on-viewer-count-changed", "scriptName": "OnViewerCountChanged", "isTrigger": true },
+      { "id": "cookie-present", "scriptName": "CookiePresent", "isTrigger": false }
     ],
     "actions": [
       {

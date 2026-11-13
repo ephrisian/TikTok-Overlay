@@ -12,6 +12,7 @@ PLUGIN_CLASS.Instance = class TikTokLiveListenerInstance extends globalThis.ISDK
 		this._status = "disconnected";
 		this._errorMessage = "";
 		this._channel = "";
+		this._sessionId = "";
 		this._serverUrl = DEFAULT_SERVER_URL;
 
 		this._bridge = new BridgeClient({
@@ -63,6 +64,7 @@ PLUGIN_CLASS.Instance = class TikTokLiveListenerInstance extends globalThis.ISDK
 		return {
 			serverUrl: this._serverUrl,
 			channel: this._channel,
+			sessionId: this._sessionId,
 			status: this._status,
 			lastEvent: this._lastEvent
 		};
@@ -72,6 +74,7 @@ PLUGIN_CLASS.Instance = class TikTokLiveListenerInstance extends globalThis.ISDK
 	{
 		this._serverUrl = data.serverUrl || DEFAULT_SERVER_URL;
 		this._channel = data.channel || "";
+		this._sessionId = data.sessionId || "";
 		this._status = data.status || "disconnected";
 		this._lastEvent = data.lastEvent || {};
 		this._bridge.setServerUrl(this._serverUrl);

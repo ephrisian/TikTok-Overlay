@@ -143,6 +143,8 @@ cr.plugins_.TikTokLiveListener = function(runtime)
 	Cnds.prototype.OnError = function() { return true; };
 	Cnds.prototype.OnConnecting = function() { return true; };
 	Cnds.prototype.OnViewerCountChanged = function() { return true; };
+	Cnds.prototype.IsConnected = function() { return this.status === "connected"; };
+	Cnds.prototype.CookiePresent = function() { return !!this.sessionId; };
 	pluginProto.cnds = new Cnds();
 
 	function Exps() {}

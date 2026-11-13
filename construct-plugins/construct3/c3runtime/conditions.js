@@ -13,5 +13,7 @@ C3.Plugins.Ephrisian_TikTokLiveListener.Cnds =
 	OnOffline() { return true; },
 	OnError() { return true; },
 	OnConnecting() { return true; },
-	OnViewerCountChanged() { return true; }
+	OnViewerCountChanged() { return true; },
+	IsConnected() { return this._status === "connected"; },
+	CookiePresent() { return !!this._sessionId; }
 };

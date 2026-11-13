@@ -5,7 +5,8 @@ C3.Plugins.Ephrisian_TikTokLiveListener.Acts =
 	Connect(channel, sessionId)
 	{
 		this._channel = String(channel || "").trim().replace(/^@/, "");
-		this._bridge.connect(this._channel, sessionId).catch(() => {});
+		this._sessionId = String(sessionId || "").trim();
+		this._bridge.connect(this._channel, this._sessionId).catch(() => {});
 	},
 
 	AuthenticateSession(sessionId)

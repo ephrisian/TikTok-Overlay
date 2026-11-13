@@ -73,6 +73,8 @@ AddCondition(8, cf_trigger, "On offline", "Connection", "On offline", "Triggered
 AddCondition(9, cf_trigger, "On error", "Connection", "On error", "Triggered when the listener encounters an error.", "OnError");
 AddCondition(10, cf_trigger, "On connecting", "Connection", "On connecting", "Triggered when the listener begins connecting.", "OnConnecting");
 AddCondition(11, cf_trigger, "On viewer count changed", "TikTok events", "On viewer count changed", "Triggered when the live viewer count changes.", "OnViewerCountChanged");
+AddCondition(12, cf_none, "Is connected", "Connection", "Is connected", "True if the listener is connected to TikTok.", "IsConnected");
+AddCondition(13, cf_none, "Cookie present", "Connection", "Cookie present", "True if a TikTok session cookie is present for authentication.", "CookiePresent");
 
 AddExpression(0, ef_return_string, "Channel", "Connection", "Channel", "The connected TikTok channel username.");
 AddExpression(1, ef_return_string, "Status", "Connection", "Status", "The current connection status.");
